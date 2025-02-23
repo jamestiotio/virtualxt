@@ -146,6 +146,7 @@ else ifneq (,$(findstring tvos,$(platform)))
 else ifneq (,$(findstring msvc,$(platform)))
    CC = cl.exe
    LDFLAGS += -DLL
+   OBJ_EXT = obj
    ODIN_UNPACK = powershell -command "Expand-Archive -Force odin.zip ."
 
    PATH := $(shell IFS=$$'\n'; cygpath "$(VS100COMNTOOLS)../../VC/bin/amd64"):$(PATH)
@@ -160,7 +161,7 @@ else ifneq (,$(findstring msvc,$(platform)))
    
    ifeq ($(STATIC_LINKING), 1)
      TARGET := $(TARGET_NAME)_libretro.lib
-   	 LD = lib.exe
+   	 AR = lib.exe
    else
      TARGET := $(TARGET_NAME)_libretro.dll
    	 LD = link.exe
@@ -186,15 +187,12 @@ setup:
 	curl -L -o odin.zip https://github.com/odin-lang/Odin/releases/download/$(ODIN_VERSION)/odin-$(system_odin)-$(ODIN_VERSION).zip && $(ODIN_UNPACK)
 
 $(OBJECTS): setup
-	@ls
-	@dir
-	@echo DARWIN_MIN_VERSION: $(MIN_VERSION)
 	PATH="$(PATH):$(MKPATH)/odin-$(system_odin)-$(ODIN_VERSION)" ODIN_TARGET=$(ODIN_TARGET) ODIN_FLAGS="$(ODIN_FLAGS)" ODIN_VET= $(MAKE) -C $(CORE_DIR) object
 
 $(TARGET): $(OBJECTS)
 ifeq ($(STATIC_LINKING), 1)
 	ifneq (,$(findstring msvc,$(platform)))
-		$(LD) -out:$@ $(OBJECTS)
+		$(AR) -out:$@ $(OBJECTS)
 	else
 		$(AR) rcs $@ $(OBJECTS)
 	endif
