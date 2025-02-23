@@ -98,7 +98,10 @@ else ifneq (,$(findstring osx,$(platform)))
    ifneq (,$(findstring arm,$(TARGET_PLATFORM)))
 		ODIN_TARGET = darwin_arm64
    else
-		ODIN_TARGET = darwin_amd64
+   		# TODO: Not sure what the issue is here? Bad OS version perhaps?
+		#ODIN_TARGET = darwin_amd64
+		ODIN_TARGET = freestanding_amd64_sysv
+		ODIN_FLAGS =
    endif
 else ifneq (,$(findstring ios,$(platform)))
    EXT ?= dylib
