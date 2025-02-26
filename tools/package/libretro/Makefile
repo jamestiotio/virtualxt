@@ -180,10 +180,8 @@ else
 
    ifeq ($(platform), win64)
     	ODIN_TARGET = windows_amd64
-    	OBJCONV = objconv -felf64 -nu
    else
 		ODIN_TARGET = windows_i386
-		OBJCONV = objconv -felf32 -nu
    endif
 endif
 
@@ -197,9 +195,6 @@ setup:
 
 $(OBJECTS): setup
 	PATH="$(PATH):$(MKPATH)/odin-$(system_odin)-$(ODIN_VERSION)" ODIN_TARGET=$(ODIN_TARGET) ODIN_FLAGS="$(ODIN_FLAGS)" ODIN_VET= $(MAKE) -C $(CORE_DIR) object
-	#ifneq ($(OBJCONV),)
-	#	$(OBJCONV) $(CORE_DIR)$(TARGET_NAME)_libretro.obj $(CORE_DIR)$(OBJECTS)
-	#endif
 
 $(TARGET): $(OBJECTS)
 ifeq ($(STATIC_LINKING), 1)
