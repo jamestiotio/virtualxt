@@ -6,7 +6,7 @@
 VirtualXT is a Turbo PC/XT emulator for [libretro](https://www.libretro.com) that runs on modern hardware, operating systems and bare-metal ARM SBCs.
 It is designed to be simple and lightweight yet still capable enough to run a large library of old application and games.
 
-Browser version is avalible [here](https://realmode.games).
+Browser version is avalible [here](https://app.virtualxt.org).
 
 ## Features
 
