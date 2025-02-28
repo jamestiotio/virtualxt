@@ -205,8 +205,7 @@ retro_set_environment :: proc "c" (cb: retro.environment_t) {
 
 	cb(ENVIRONMENT_SET_VARIABLES, &options)
 
-	save_dir: cstring
-	no_game := retro_callbacks.environment(ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir)
+	no_game: c.bool = true
 	cb(ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_game)
 }
 
