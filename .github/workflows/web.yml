@@ -64,9 +64,14 @@ jobs:
           mkdir -p pkg/emscripten/libretro/assets/cores/virtualxt
           cp -r ../retroarch/assets/frontend pkg/emscripten/libretro/assets
 
-      #- name: Content
-      #  run: |
-      #    echo >> pkg/emscripten/libretro/assets/cores/virtualxt/.index
+      - name: Content
+        run: |
+          CONTENT_DEST=pkg/emscripten/libretro/assets/cores/virtualxt
+          CONTENT="svardos.img svardos_hd.img elks_hd.img"
+          for FILE in ${CONTENT}; do
+            cp boot/${FILE} ${CONTENT_DEST}
+            echo ${FILE} >> ${CONTENT_DEST}/.index
+          done
           
       - name: Deploy
         env:
