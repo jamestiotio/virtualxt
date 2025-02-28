@@ -64,6 +64,7 @@ jobs:
           cp virtualxt_libretro.{js,wasm} pkg/emscripten/libretro
           mkdir -p pkg/emscripten/libretro/assets/cores/VirtualXT
           cp -r ../retroarch/assets/frontend pkg/emscripten/libretro/assets
+          cp -r ../retroarch/media pkg/emscripten/libretro
 
       - name: Content
         run: |
