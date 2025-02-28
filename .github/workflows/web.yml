@@ -86,10 +86,12 @@ jobs:
           butler login
           butler push RetroArch/pkg/emscripten/libretro phix/web-test:web-${GITHUB_REF_NAME} --userversion ${VXT_VERSION}-${GITHUB_RUN_ID}
 
-      - name: Build (Pages)
+      - name: Content (Pages)
         run: |
-          cp tools/icon/icon.ico RetroArch/pkg/emscripten/libretro/favicon.ico
-          echo -n app.virtualxt.org > RetroArch/pkg/emscripten/libretro/CNAME
+          CONTENT_DEST=RetroArch/pkg/emscripten/libretro
+          cp tools/icon/icon.ico ${CONTENT_DEST}/favicon.ico
+          echo -n app.virtualxt.org > ${CONTENT_DEST}/CNAME
+          echo > ${CONTENT_DEST}/.nojekyll
 
       - name: Deploy (Pages)
         uses: JamesIves/github-pages-deploy-action@4.1.6
