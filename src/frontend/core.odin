@@ -37,6 +37,8 @@ import "modules:vga"
 import "modules:mouse"
 
 import retro "vxt:frontend/libretro"
+import retro_callbacks "vxt:frontend/libretro/callbacks"
+import rt "vxt:xruntime"
 import "vxt:machine"
 
 VXT_VERSION :: "1.3.0"
@@ -57,15 +59,6 @@ disk_image_index: uint
 frame_buffer: struct {
 	memory:        [dynamic]u32,
 	width, height: uint,
-}
-
-retro_callbacks: struct {
-	environment: retro.environment_t,
-	video:       retro.video_refresh_t,
-	audio:       retro.audio_sample_t,
-	input_poll:  retro.input_poll_t,
-	input_state: retro.input_state_t,
-	vfs:         ^retro.vfs_interface,
 }
 
 write_default_disk_image :: proc(reset := false) -> string {
@@ -105,7 +98,7 @@ write_default_disk_image :: proc(reset := false) -> string {
 }
 
 set_eject_state :: proc "c" (ejected: c.bool) -> c.bool {
-	context = default_context
+	context = rt.default_context
 
 	mounted: byte // 0 == First floppy drive
 	machine.configure("disk", "mounted", &mounted)
@@ -123,7 +116,7 @@ set_eject_state :: proc "c" (ejected: c.bool) -> c.bool {
 }
 
 get_eject_state :: proc "c" () -> c.bool {
-	context = default_context
+	context = rt.default_context
 
 	mounted: byte
 	machine.configure("disk", "mounted", &mounted)
@@ -147,7 +140,7 @@ get_num_images :: proc "c" () -> c.uint {
 }
 
 replace_image_index :: proc "c" (index: c.uint, #by_ptr info: retro.game_info) -> c.bool {
-	context = default_context
+	context = rt.default_context
 
 	assert(int(index) < len(disk_images))
 	if info.path == nil {
@@ -161,7 +154,7 @@ replace_image_index :: proc "c" (index: c.uint, #by_ptr info: retro.game_info) -
 }
 
 add_image_index :: proc "c" () -> c.bool {
-	context = default_context
+	context = rt.default_context
 	append(&disk_images, strings.clone(""))
 	return true
 }
@@ -176,7 +169,7 @@ retro_init :: proc "c" () {
 @(export)
 retro_set_environment :: proc "c" (cb: retro.environment_t) {
 	using retro, runtime.Logger_Level
-	context = default_context
+	context = rt.default_context
 
 	retro_callbacks.environment = cb
 
@@ -201,7 +194,7 @@ retro_set_environment :: proc "c" (cb: retro.environment_t) {
 			log_printf_t(data)(lv, "%s\n", strings.to_cstring(&builder))
 		}
 
-		default_context.logger = runtime.Logger{logger_proc, rawptr(logging.log), .Debug, nil}
+		rt.default_context.logger = runtime.Logger{logger_proc, rawptr(logging.log), .Debug, nil}
 	}
 
 	cb(ENVIRONMENT_SET_VARIABLES, &options)
@@ -212,7 +205,7 @@ retro_set_environment :: proc "c" (cb: retro.environment_t) {
 
 @(export)
 retro_reset :: proc "c" () {
-	context = default_context
+	context = rt.default_context
 	check_variables()
 	machine.reset()
 }
@@ -280,6 +273,7 @@ setup_machine :: proc(info: ^retro.game_info) {
 	configure("mouse", "set_input_state_callback", retro_callbacks.input_state)
 
 	chipset.create()
+	configure("chipset", "set_audio_frequency", uint(AUDIO_FREQUENCY))
 
 	if enable_ems {
 		ems.create()
@@ -297,7 +291,7 @@ setup_machine :: proc(info: ^retro.game_info) {
 
 @(export)
 retro_load_game :: proc "c" (info: ^retro.game_info) -> c.bool {
-	context = default_context
+	context = rt.default_context
 
 	fmt := retro.pixel_format.PIXEL_FORMAT_XRGB8888
 	if !retro_callbacks.environment(retro.ENVIRONMENT_SET_PIXEL_FORMAT, &fmt) {
@@ -333,12 +327,6 @@ retro_load_game :: proc "c" (info: ^retro.game_info) -> c.bool {
 	frame_buffer.memory = make([dynamic]u32, 720 * 480)
 	setup_machine(info)
 
-	kbcb := retro.keyboard_callback{keyboard_callback}
-	retro_callbacks.environment(retro.ENVIRONMENT_SET_KEYBOARD_CALLBACK, &kbcb)
-
-	acb := retro.audio_callback{audio_callback, nil}
-	retro_callbacks.environment(retro.ENVIRONMENT_SET_AUDIO_CALLBACK, &acb)
-
 	show_message("Ensure you have 'Game Focus' mode set to 'Detect' under Setting > Input, or press the 'Scroll Lock' key", 6 * time.Second)
 	return true
 }
@@ -350,7 +338,7 @@ frame_time_callback :: proc "c" (usec: retro.usec_t) {
 
 @(export)
 retro_run :: proc "c" () {
-	context = default_context
+	context = rt.default_context
 	defer free_all(context.temp_allocator)
 
 	updated := false
@@ -384,7 +372,7 @@ retro_run :: proc "c" () {
 
 @(export)
 retro_unload_game :: proc "c" () {
-	context = default_context
+	context = rt.default_context
 	machine.destroy()
 	delete(frame_buffer.memory)
 }
@@ -432,198 +420,4 @@ show_message :: proc(message: string, duration := time.Second * 3) {
 	msg := retro.message{strings.clone_to_cstring(message), c.uint(time.duration_seconds(duration) * 60)}
 	retro_callbacks.environment(retro.ENVIRONMENT_SET_MESSAGE, &msg)
 	delete(msg.msg)
-}
-
-audio_callback :: proc "c" () {
-	context = default_context
-	ppi, ok := machine.peripheral_from_class(machine.Peripheral_Class.PPI)
-	assert(ok)
-
-	sample := chipset.ppi_generate_sample(ppi, AUDIO_FREQUENCY)
-	retro_callbacks.audio(sample, sample)
-}
-
-keyboard_callback :: proc "c" (down: c.bool, keycode: retro.key, character: c.uint32_t, key_modifiers: c.uint16_t) {
-	context = default_context
-	using retro
-
-	xt_key: byte
-	#partial switch keycode {
-	case .K_ESCAPE:
-		xt_key = 0x01
-	case .K_1:
-		xt_key = 0x02
-	case .K_2:
-		xt_key = 0x03
-	case .K_3:
-		xt_key = 0x04
-	case .K_4:
-		xt_key = 0x05
-	case .K_5:
-		xt_key = 0x06
-	case .K_6:
-		xt_key = 0x07
-	case .K_7:
-		xt_key = 0x08
-	case .K_8:
-		xt_key = 0x09
-	case .K_9:
-		xt_key = 0x0A
-	case .K_0:
-		xt_key = 0x0B
-	case .K_MINUS:
-		xt_key = 0x0C
-	case .K_EQUALS:
-		xt_key = 0xD
-	case .K_BACKSPACE:
-		xt_key = 0x0E
-	case .K_TAB:
-		xt_key = 0x0F
-	case .K_q:
-		xt_key = 0x10
-	case .K_w:
-		xt_key = 0x11
-	case .K_e:
-		xt_key = 0x12
-	case .K_r:
-		xt_key = 0x13
-	case .K_t:
-		xt_key = 0x14
-	case .K_y:
-		xt_key = 0x15
-	case .K_u:
-		xt_key = 0x16
-	case .K_i:
-		xt_key = 0x17
-	case .K_o:
-		xt_key = 0x18
-	case .K_p:
-		xt_key = 0x19
-	case .K_LEFTBRACKET:
-		xt_key = 0x1A
-	case .K_RIGHTBRACKET:
-		xt_key = 0x1B
-	case .K_RETURN:
-		xt_key = 0x1C
-	case .K_LCTRL, .K_RCTRL:
-		xt_key = 0x1D
-	case .K_a:
-		xt_key = 0x1E
-	case .K_s:
-		xt_key = 0x1F
-	case .K_d:
-		xt_key = 0x20
-	case .K_f:
-		xt_key = 0x21
-	case .K_g:
-		xt_key = 0x22
-	case .K_h:
-		xt_key = 0x23
-	case .K_j:
-		xt_key = 0x24
-	case .K_k:
-		xt_key = 0x25
-	case .K_l:
-		xt_key = 0x26
-	case .K_SEMICOLON:
-		xt_key = 0x27
-	case .K_QUOTE:
-		xt_key = 0x28
-	case .K_BACKQUOTE:
-		xt_key = 0x29
-	case .K_LSHIFT:
-		xt_key = 0x2A
-	case .K_BACKSLASH:
-		xt_key = 0x2B // INT2
-	case .K_z:
-		xt_key = 0x2C
-	case .K_x:
-		xt_key = 0x2D
-	case .K_c:
-		xt_key = 0x2E
-	case .K_v:
-		xt_key = 0x2F
-	case .K_b:
-		xt_key = 0x30
-	case .K_n:
-		xt_key = 0x31
-	case .K_m:
-		xt_key = 0x32
-	case .K_COMMA:
-		xt_key = 0x33
-	case .K_PERIOD:
-		xt_key = 0x34
-	case .K_SLASH:
-		xt_key = 0x35
-	case .K_RSHIFT:
-		xt_key = 0x36
-	case .K_PRINT:
-		xt_key = 0x37
-	case .K_LALT, .K_RALT:
-		xt_key = 0x38
-	case .K_SPACE:
-		xt_key = 0x39
-	case .K_CAPSLOCK:
-		xt_key = 0x3A
-	case .K_F1:
-		xt_key = 0x3B
-	case .K_F2:
-		xt_key = 0x3C
-	case .K_F3:
-		xt_key = 0x3D
-	case .K_F4:
-		xt_key = 0x3E
-	case .K_F5:
-		xt_key = 0x3F
-	case .K_F6:
-		xt_key = 0x40
-	case .K_F7:
-		xt_key = 0x41
-	case .K_F8:
-		xt_key = 0x42
-	case .K_F9:
-		xt_key = 0x43
-	case .K_F10:
-		xt_key = 0x44
-	case .K_NUMLOCK:
-		xt_key = 0x45
-	case .K_SCROLLOCK:
-		xt_key = 0x46
-	case .K_KP7, .K_HOME:
-		xt_key = 0x47
-	case .K_KP8, .K_UP:
-		xt_key = 0x48
-	case .K_KP9, .K_PAGEUP:
-		xt_key = 0x49
-	case .K_KP_MINUS:
-		xt_key = 0x4A
-	case .K_KP4, .K_LEFT:
-		xt_key = 0x4B
-	case .K_KP5:
-		xt_key = 0x4C
-	case .K_KP6, .K_RIGHT:
-		xt_key = 0x4D
-	case .K_KP_PLUS:
-		xt_key = 0x4E
-	case .K_KP1, .K_END:
-		xt_key = 0x4F
-	case .K_KP2, .K_DOWN:
-		xt_key = 0x50
-	case .K_KP3, .K_PAGEDOWN:
-		xt_key = 0x51
-	case .K_KP0, .K_INSERT:
-		xt_key = 0x52
-	case .K_KP_PERIOD, .K_DELETE:
-		xt_key = 0x53
-	}
-
-	if xt_key != 0 {
-		if !down {
-			xt_key |= 0x80
-		}
-
-		ppi, ok := machine.peripheral_from_class(machine.Peripheral_Class.PPI)
-		assert(ok)
-		chipset.ppi_push_event(ppi, xt_key)
-	}
 }

@@ -19,7 +19,7 @@
 // 3. This notice may not be removed or altered from any source
 //    distribution.
 
-package frontend
+package xruntime
 
 import "base:runtime"
 import "core:mem"

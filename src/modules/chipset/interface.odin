@@ -23,38 +23,6 @@ package chipset
 
 import "vxt:machine/peripheral"
 
-PPI_TONE_VOLUME :: 8192
-
-ppi_generate_sample :: proc(p: ^peripheral.Peripheral, freq: uint) -> i16 {
-	ppi := peripheral.cast_peripheral(p, PPI)
-	assert(ppi.pit != nil)
-
-	tone_hz := pit_get_frequency(ppi.pit, 2)
-	if !ppi.spk_enabled || (tone_hz <= 0) {
-		return 0
-	}
-
-	square_wave_period := i64(f64(freq) / tone_hz)
-	half_square_wave_period := square_wave_period / 2
-
-	if half_square_wave_period == 0 {
-		return 0
-	}
-
-	ppi.spk_sample_index += 1
-	return bool((ppi.spk_sample_index / half_square_wave_period) % 2) ? PPI_TONE_VOLUME : -PPI_TONE_VOLUME
-}
-
-ppi_push_event :: proc(p: ^peripheral.Peripheral, scan: byte) {
-	ppi := peripheral.cast_peripheral(p, PPI)
-	assert(ppi.pit != nil)
-
-	if !ppi.kb_reset {
-		ppi.data_port = scan
-		peripheral.peripheral_interface.interrupt(1)
-	}
-}
-
 pit_get_frequency :: proc(p: ^peripheral.Peripheral, channel: int) -> f64 {
 	switch channel {
 	case 0 ..= 2:

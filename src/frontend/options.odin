@@ -28,6 +28,7 @@ import "core:strings"
 import "core:log"
 
 import retro "vxt:frontend/libretro"
+import retro_callbacks "vxt:frontend/libretro/callbacks"
 import "vxt:machine"
 
 glabios := true
