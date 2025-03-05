@@ -20,7 +20,7 @@ env:
 jobs:
   linux-tests:
     name: Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 180
 
     steps:
@@ -30,6 +30,8 @@ jobs:
 
       - name: Setup
         run: |
+          sudo apt-get update
+          sudo apt-get install kcov
           rm -rf odin; mkdir odin
           curl -L -o odin.zip https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-linux-amd64-${ODIN_VERSION}.zip && unzip odin.zip
           echo "${GITHUB_WORKSPACE}/odin-linux-amd64-${ODIN_VERSION}" >> $GITHUB_PATH
@@ -37,5 +39,13 @@ jobs:
       - name: Generate
         run: make testdata
         
+      - name: Build
+        run: make testbin
+        
       - name: Test
-        run: make tests
+        run: kcov --include-path=src --exclude-path=src/frontend/libretro,src/tests kcov-out ./tests .
+
+      - name: Report
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: bash <(curl -s https://codecov.io/bash) -s kcov-out
