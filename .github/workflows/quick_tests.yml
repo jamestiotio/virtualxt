@@ -44,7 +44,7 @@ jobs:
         
       - name: Test
         run: |
-          kcov kcov-out ./tests .
+          kcov --include-path=src --exclude-path=src/frontend/libretro,src/tests kcov-out ./tests .
 
       - name: Report
         env:
