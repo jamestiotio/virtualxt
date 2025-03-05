@@ -162,7 +162,7 @@ add_image_index :: proc "c" () -> c.bool {
 @(export)
 retro_init :: proc "c" () {
 	when #config(VXT_STARTUP_RUNTIME, false) {
-		odin_startup_runtime(nil, 0)
+		rt.odin_startup_runtime(nil, 0)
 	}
 }
 
