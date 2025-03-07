@@ -73,7 +73,7 @@ testdata:
 	(cd src/tests/testdata && ./download.py)
 
 testbin:
-	odin build src/tests -build-mode:test -debug -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_SHORT_LOGS=true -define:ODIN_TEST_LOG_LEVEL=error $(ODIN_VET) $(COLLECTIONS)
+	odin build src/tests -build-mode:test -debug -o:speed -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_SHORT_LOGS=true -define:ODIN_TEST_LOG_LEVEL=error $(ODIN_VET) $(COLLECTIONS)
 
 .PHONY: tests
 tests: testbin
