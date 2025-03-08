@@ -99,10 +99,6 @@ check_memory :: proc(addr: u32, res, value: byte, divz: bool) -> bool {
 }
 
 execute_test :: proc(t: ^testing.T, test: cbor.Value, idx: int, flag_mask: Flags) {
-	machine.create()
-	defer machine.destroy()
-	machine.initialize()
-
 	using peripheral.peripheral_interface
 	using regs := registers()
 
@@ -212,7 +208,13 @@ run_opcode_tests :: proc(t: ^testing.T, file_path: string, flag_mask: Flags) {
 	cbor_data, err := cbor.decode(s = string(data), allocator = context.temp_allocator)
 	testing.expect_value(t, err, nil)
 
+	machine.create()
+	machine.initialize()
+
 	for op, idx in cbor_data.(^[]cbor.Value) {
+		machine.reset()
 		execute_test(t, op, idx, flag_mask)
 	}
+
+	machine.destroy()
 }
