@@ -1,100 +1,100 @@
 name: Web
 
 on:
-  push:
-    branches: [ "edge" ]
+    push:
+        branches: ["edge"]
 
-  workflow_dispatch:
+    workflow_dispatch:
 
 env:
-  VXT_VERSION: 1.3.0
-  ODIN_VERSION: dev-2025-02
-  ITCH_CONTENT: "svardos.img svardos_hd.img elks_hd.img"
+    VXT_VERSION: 1.3.0
+    ODIN_VERSION: dev-2025-03
+    ITCH_CONTENT: "svardos.img svardos_hd.img elks_hd.img"
 
 jobs:
-  web-build:
-    name: Web
-    runs-on: ubuntu-latest
+    web-build:
+        name: Web
+        runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: recursive
-      
-      - name: Inject slug/short variables
-        uses: rlespinasse/github-slug-action@v3.x
+        steps:
+            - uses: actions/checkout@v2
+              with:
+                  submodules: recursive
 
-      - name: Setup
-        run: |
-          sudo apt-get update
-          sudo apt-get install lld coffeescript
-          rm -rf odin; mkdir odin
-          curl -L -o odin.zip https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-linux-amd64-${ODIN_VERSION}.zip && unzip odin.zip
-          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default && unzip butler.zip -d butler
-          echo "${GITHUB_WORKSPACE}/butler" >> $GITHUB_PATH
-          echo "${GITHUB_WORKSPACE}/odin-linux-amd64-${ODIN_VERSION}" >> $GITHUB_PATH
-          
-      - name: Setup (RetroArch)
-        run: |
-          git clone -b virtualxt https://github.com/virtualxt/RetroArch
-          curl -L -o RetroArch.7z https://buildbot.libretro.com/nightly/emscripten/RetroArch.7z && 7z x RetroArch.7z
-          
-      - name: Setup (Emscripten)
-        run: |
-          git clone https://github.com/emscripten-core/emsdk
-          cd emsdk
-          ./emsdk install 3.1.46
-          ./emsdk activate 3.1.46
+            - name: Inject slug/short variables
+              uses: rlespinasse/github-slug-action@v3.x
 
-      - name: Test
-        run: make tests
+            - name: Setup
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install lld coffeescript
+                  rm -rf odin; mkdir odin
+                  curl -L -o odin.zip https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-linux-amd64-${ODIN_VERSION}.zip && unzip odin.zip
+                  curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default && unzip butler.zip -d butler
+                  echo "${GITHUB_WORKSPACE}/butler" >> $GITHUB_PATH
+                  echo "${GITHUB_WORKSPACE}/odin-linux-amd64-${ODIN_VERSION}" >> $GITHUB_PATH
 
-      - name: Build (VirtualXT)
-        run: |
-          ODIN_TARGET=freestanding_wasm32 make object
-          source emsdk/emsdk_env.sh && emar rcs virtualxt_libretro_emscripten.bc virtualxt_libretro.wasm.o          
+            - name: Setup (RetroArch)
+              run: |
+                  git clone -b virtualxt https://github.com/virtualxt/RetroArch
+                  curl -L -o RetroArch.7z https://buildbot.libretro.com/nightly/emscripten/RetroArch.7z && 7z x RetroArch.7z
 
-      - name: Build (RetroArch)
-        run: |
-          cp virtualxt_libretro_emscripten.bc RetroArch/libretro_emscripten.bc
-          cd RetroArch
-          source ../emsdk/emsdk_env.sh && emmake make -f Makefile.emscripten LIBRETRO=virtualxt -j all
-          cp virtualxt_libretro.{js,wasm} pkg/emscripten/libretro
-          mkdir -p pkg/emscripten/libretro/assets/cores/VirtualXT
-          cp -r ../retroarch/assets/frontend pkg/emscripten/libretro/assets
-          cp -r ../retroarch/media pkg/emscripten/libretro
-          cp ../tools/icon/canvas.png pkg/emscripten/libretro/media
+            - name: Setup (Emscripten)
+              run: |
+                  git clone https://github.com/emscripten-core/emsdk
+                  cd emsdk
+                  ./emsdk install 3.1.46
+                  ./emsdk activate 3.1.46
 
-      - name: Content
-        run: |
-          CONTENT_DEST=RetroArch/pkg/emscripten/libretro/assets/cores/VirtualXT
-          for FILE in ${ITCH_CONTENT}; do
-            cp boot/${FILE} ${CONTENT_DEST}
-            echo ${FILE} >> ${CONTENT_DEST}/.index
-          done
-          echo >> ${CONTENT_DEST}/../.index
-          echo VirtualXT >> ${CONTENT_DEST}/../.index-dirs
-          cd RetroArch/pkg/emscripten/libretro
-          chmod +x indexer
-          cd assets/cores
-          ../../indexer > .index-xhr
+            - name: Test
+              run: make tests
 
-      - name: Deploy (itch.io)
-        env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-        run: |
-          butler login
-          butler push RetroArch/pkg/emscripten/libretro phix/virtualxt:web-${GITHUB_REF_NAME} --userversion ${VXT_VERSION}-${GITHUB_RUN_ID}
+            - name: Build (VirtualXT)
+              run: |
+                  ODIN_TARGET=freestanding_wasm32 make object
+                  source emsdk/emsdk_env.sh && emar rcs virtualxt_libretro_emscripten.bc virtualxt_libretro.wasm.o
 
-      - name: Content (Pages)
-        run: |
-          CONTENT_DEST=RetroArch/pkg/emscripten/libretro
-          cp tools/icon/icon.ico ${CONTENT_DEST}/favicon.ico
-          echo -n app.virtualxt.org > ${CONTENT_DEST}/CNAME
-          echo > ${CONTENT_DEST}/.nojekyll
+            - name: Build (RetroArch)
+              run: |
+                  cp virtualxt_libretro_emscripten.bc RetroArch/libretro_emscripten.bc
+                  cd RetroArch
+                  source ../emsdk/emsdk_env.sh && emmake make -f Makefile.emscripten LIBRETRO=virtualxt -j all
+                  cp virtualxt_libretro.{js,wasm} pkg/emscripten/libretro
+                  mkdir -p pkg/emscripten/libretro/assets/cores/VirtualXT
+                  cp -r ../retroarch/assets/frontend pkg/emscripten/libretro/assets
+                  cp -r ../retroarch/media pkg/emscripten/libretro
+                  cp ../tools/icon/canvas.png pkg/emscripten/libretro/media
 
-      - name: Deploy (Pages)
-        uses: JamesIves/github-pages-deploy-action@4.1.6
-        with:
-          branch: gh-pages
-          folder: RetroArch/pkg/emscripten/libretro
+            - name: Content
+              run: |
+                  CONTENT_DEST=RetroArch/pkg/emscripten/libretro/assets/cores/VirtualXT
+                  for FILE in ${ITCH_CONTENT}; do
+                    cp boot/${FILE} ${CONTENT_DEST}
+                    echo ${FILE} >> ${CONTENT_DEST}/.index
+                  done
+                  echo >> ${CONTENT_DEST}/../.index
+                  echo VirtualXT >> ${CONTENT_DEST}/../.index-dirs
+                  cd RetroArch/pkg/emscripten/libretro
+                  chmod +x indexer
+                  cd assets/cores
+                  ../../indexer > .index-xhr
+
+            - name: Deploy (itch.io)
+              env:
+                  BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+              run: |
+                  butler login
+                  butler push RetroArch/pkg/emscripten/libretro phix/virtualxt:web-${GITHUB_REF_NAME} --userversion ${VXT_VERSION}-${GITHUB_RUN_ID}
+
+            - name: Content (Pages)
+              run: |
+                  CONTENT_DEST=RetroArch/pkg/emscripten/libretro
+                  cp tools/icon/icon.ico ${CONTENT_DEST}/favicon.ico
+                  echo -n app.virtualxt.org > ${CONTENT_DEST}/CNAME
+                  echo > ${CONTENT_DEST}/.nojekyll
+
+            - name: Deploy (Pages)
+              uses: JamesIves/github-pages-deploy-action@4.1.6
+              with:
+                  branch: gh-pages
+                  folder: RetroArch/pkg/emscripten/libretro
