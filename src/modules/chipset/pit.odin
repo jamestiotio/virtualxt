@@ -135,3 +135,16 @@ pit_timer :: proc(pit: ^PIT, id: peripheral.Peripheral_Timer_ID, cycles: uint) {
 		pit.ticker -= INTERVAL
 	}
 }
+
+pit_get_frequency :: proc(pit: ^PIT, channel: int) -> f64 {
+	switch channel {
+	case 0 ..= 2:
+		fd := f64(pit.channels[channel].chdata)
+		if fd == 0 {
+			fd = f64(0x10000)
+		}
+		return PIT_FREQUENCY / f64(fd)
+	case:
+		return 0
+	}
+}

@@ -63,7 +63,7 @@ allocate_peripheral :: proc(t: ^testing.T) {
 	using machine
 
 	create()
-	rom.create("none")
+	instantiate("rom")
 	initialize()
 	destroy()
 }

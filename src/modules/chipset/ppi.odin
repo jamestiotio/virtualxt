@@ -23,34 +23,31 @@
 
 package chipset
 
-import "core:log"
 import "core:c"
+import "core:log"
 
 import retro "vxt:frontend/libretro"
 import retro_callbacks "vxt:frontend/libretro/callbacks"
-import rt "vxt:xruntime"
 import "vxt:machine/peripheral"
+import rt "vxt:xruntime"
 
 PPI_TONE_VOLUME :: 8192
 
 PPI :: struct {
-	data_port, port_61, xt_switches:      byte,
-	kb_reset, spk_enabled: 				  bool,
-	spk_sample_index:                     i64,
-	audio_freq:                           uint,
-	pit:                                  ^peripheral.Peripheral,
+	data_port, port_61, xt_switches: byte,
+	kb_reset, spk_enabled:           bool,
+	spk_sample_index:                i64,
+	audio_freq:                      uint,
+	pit:                             ^PIT,
 }
 
 ppi_install :: proc(ppi: ^PPI) -> bool {
 	using peripheral
 	register_io_address_range(ppi, 0x60, 0x63)
 
-	for p in peripheral_manager.peripherals {
-		if p.class == .PIT {
-			ppi.pit = get_peripheral(p)
-			break
-		}
-	}
+	p, _, ok := peripheral.get_peripheral_from_class(peripheral.Peripheral_Class.PIT)
+	assert(ok)
+	ppi.pit = peripheral.cast_peripheral(p, PIT)
 
 	kbcb := retro.keyboard_callback{ppi_keyboard_callback}
 	retro_callbacks.environment(retro.ENVIRONMENT_SET_KEYBOARD_CALLBACK, &kbcb)
@@ -140,7 +137,7 @@ ppi_generate_sample :: proc(ppi: ^PPI) -> i16 {
 
 ppi_push_event :: proc(ppi: ^PPI, scan: byte) {
 	assert(ppi.pit != nil)
-	
+
 	if !ppi.kb_reset {
 		ppi.data_port = scan
 		peripheral.peripheral_interface.interrupt(1)
