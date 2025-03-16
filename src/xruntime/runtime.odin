@@ -46,7 +46,7 @@ odin_startup_runtime :: proc "c" (heap: rawptr, size: c.int) {
 @(init)
 init :: proc() {
 	when !#config(VXT_EXTERNAL_HEAP, false) {
-		@(static) heap_memory: [1024 * 1024 * #config(VXT_MAX_MEMORY_MB, 16)]byte // 16MB ought be enough for everyone?
+		@(static) heap_memory: [1024 * 1024 * #config(VXT_MAX_MEMORY_MB, 32)]byte // 32MB ought be enough for everyone?
 		core_heap = heap_memory[:]
 	}
 
@@ -66,12 +66,12 @@ init :: proc() {
 	) {
 		ptr, err := mem.buddy_allocator_proc(allocator_data, mode, size, alignment, old_memory, old_size, location)
 		if err == .Out_Of_Memory {
-			log.panicf("%v: Buddy allocator out of memory!", location)
+			panic("Buddy allocator out of memory!")
 		}
 		return ptr, err
 	}
 
-	mem.arena_init(&core_temp_allocator, make([]byte, 1024 * 1024 * 1)) // 1MB
+	mem.arena_init(&core_temp_allocator, make([]byte, 1024 * 1024 * 4)) // 4MB
 	context.temp_allocator = mem.arena_allocator(&core_temp_allocator)
 	context.temp_allocator.procedure =
 	proc(
@@ -87,7 +87,7 @@ init :: proc() {
 	) {
 		ptr, err := mem.arena_allocator_proc(allocator_data, mode, size, alignment, old_memory, old_size, location)
 		if err == .Out_Of_Memory {
-			log.panicf("%v: Arena allocator out of memory!", location)
+			panic("Arena allocator out of memory!")
 		}
 		return ptr, err
 	}

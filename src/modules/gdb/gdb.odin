@@ -263,3 +263,32 @@ gdb_sys_insert :: proc "c" (state: ^GDB_State, ty: c.uint, addr: c.uint, kind: c
 gdb_sys_remove :: proc "c" (state: ^GDB_State, ty: c.uint, addr: c.uint, kind: c.uint) -> c.int {
 	return 0
 }
+
+@(init)
+gdb :: proc() {
+	peripheral.register_constructor(proc(_: string) {
+		when #config(VXT_GDBSTUB, false) {
+			gdb, cb := peripheral.allocate(GDB)
+			gdb.state.server = -1
+			gdb.state.client = -1
+
+			cb.class = .DEBUGGER
+			cb.install = install
+			cb.config = config
+			cb.timer = timer
+
+			cb.destroy = proc(gdb: ^GDB) {
+				if gdb.state.server != -1 {
+					close_socket(gdb.state.server)
+				}
+				if gdb.state.client != -1 {
+					close_socket(gdb.state.client)
+				}
+			}
+
+			cb.name = proc(_: ^GDB) -> string {
+				return "GDB Stub"
+			}
+		}
+	})
+}

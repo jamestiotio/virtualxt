@@ -24,6 +24,7 @@
 package ems
 
 import "core:log"
+import "core:math/rand"
 
 import "vxt:machine/peripheral"
 
@@ -31,9 +32,9 @@ import "vxt:machine/peripheral"
 MEMORY_SIZE :: 0x200000
 
 EMS :: struct {
-	mem: [MEMORY_SIZE]byte,
-	mem_base: u32,
-	io_base: u16,
+	mem:            [MEMORY_SIZE]byte,
+	mem_base:       u32,
+	io_base:        u16,
 	page_selectors: [4]byte,
 }
 
@@ -59,7 +60,7 @@ config :: proc(ems: ^EMS, name, key: string, value: any) -> (ok := true) {
 	return
 }
 
-physical_address :: proc(ems: ^EMS,  #any_int addr: u32) -> u32 {
+physical_address :: proc(ems: ^EMS, #any_int addr: u32) -> u32 {
 	frame_addr := addr - ems.mem_base
 	page_addr := frame_addr & 0x3FFF
 	selector := ems.page_selectors[(frame_addr >> 14) & 3]
@@ -86,4 +87,26 @@ io_in :: proc(ems: ^EMS, port: u16) -> byte {
 io_out :: proc(ems: ^EMS, port: u16, data: byte) {
 	sel := port - ems.io_base
 	ems.page_selectors[sel & 3] = data
+}
+
+@(init)
+ems :: proc() {
+	peripheral.register_constructor(proc(_: string) {
+		ems, cb := peripheral.allocate(EMS)
+
+		_ = rand.read(ems.mem[:])
+		ems.mem_base = 0xD0000
+		ems.io_base = 0x260
+
+		cb.install = install
+		cb.config = config
+		cb.read = read
+		cb.write = write
+		cb.io_in = io_in
+		cb.io_out = io_out
+
+		cb.name = proc(_: ^EMS) -> string {
+			return "Lo-tech 2MB EMS Board"
+		}
+	})
 }

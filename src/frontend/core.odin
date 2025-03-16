@@ -27,14 +27,14 @@ import "core:log"
 import "core:strings"
 import "core:time"
 
-import "modules:cga"
-import "modules:chipset"
-import "modules:disk"
-import "modules:ems"
-import "modules:gdb"
-import "modules:mouse"
-import "modules:rom"
-import "modules:vga"
+@(require) import "modules:cga"
+@(require) import "modules:chipset"
+@(require) import "modules:disk"
+@(require) import "modules:ems"
+@(require) import "modules:gdb"
+@(require) import "modules:mouse"
+@(require) import "modules:rom"
+@(require) import "modules:vga"
 
 import retro "vxt:frontend/libretro"
 import retro_callbacks "vxt:frontend/libretro/callbacks"
@@ -210,29 +210,32 @@ retro_reset :: proc "c" () {
 	machine.reset()
 }
 
-setup_machine :: proc(info: ^retro.game_info) {
+setup_machine_config :: proc(config_path: string) -> bool {
+	return false
+}
+
+setup_default_machine :: proc(info: ^retro.game_info) {
 	using machine
 
 	create()
 	check_variables()
 
-	rom.create("bios")
+	instantiate("rom", "bios")
 	configure("bios", "name", "BIOS")
-	configure("bios", "base", u32(0xFE000))
+	configure("bios", "base", "0xFE000")
 	if glabios {
 		configure("bios", "mem", #load("bios:GLABIOS.ROM", []byte))
 	} else {
 		configure("bios", "mem", #load("bios:pcxtbios.bin", []byte))
 	}
 
-	rom.create("vxtx")
+	instantiate("rom", "vxtx")
 	configure("vxtx", "name", "Disk Extension")
 	configure("vxtx", "mem", #load("bios:vxtx.bin", []byte))
-	configure("vxtx", "base", u32(0xFD800))
+	configure("vxtx", "base", "0xFD800")
 
 	{
-		disk.create()
-		configure("disk", "vfs", retro_callbacks.vfs)
+		instantiate("disk")
 		if info != nil {
 			configure("disk", "auto", string(info.path))
 		} else if path := write_default_disk_image(reset_default_disk); path != "" {
@@ -241,9 +244,9 @@ setup_machine :: proc(info: ^retro.game_info) {
 
 		// Check if floppy drive 0 was mounted.
 		mounted: byte
-		machine.configure("disk", "mounted", &mounted)
+		configure("disk", "mounted", &mounted)
 
-		machine.configure("disk", "boot", byte((bool(mounted) && floppy_boot_prio) ? 0 : 0x80))
+		configure("disk", "boot", byte((bool(mounted) && floppy_boot_prio) ? 0 : 0x80))
 		if bool(mounted) {
 			append(&disk_images, strings.clone(string(info.path)))
 		}
@@ -255,31 +258,31 @@ setup_machine :: proc(info: ^retro.game_info) {
 	}
 
 	if enable_vga {
-		rom.create("vgabios")
+		instantiate("rom", "vgabios")
 		configure("vgabios", "name", "VGA BIOS")
-		configure("vgabios", "base", u32(0xC0000))
+		configure("vgabios", "base", "0xC0000")
 		configure("vgabios", "mem", #load("bios:vgabios.bin", []byte))
 
-		vga.create()
+		instantiate("vga")
 		configure("vga", "framebuffer", frame_buffer.memory[:])
 		configure("vga", "modeset_callback", set_framebuffer_size)
 	} else {
-		cga.create()
+		instantiate("cga")
 		configure("cga", "framebuffer", frame_buffer.memory[:])
 		configure("cga", "modeset_callback", set_framebuffer_size)
 	}
 
-	mouse.create()
+	instantiate("mouse")
 
-	chipset.create()
+	instantiate("chipset")
 	configure("chipset", "set_audio_frequency", uint(AUDIO_FREQUENCY))
 
 	if enable_ems {
-		ems.create()
+		instantiate("ems")
 	}
 
 	if gdb_server {
-		gdb.create()
+		instantiate("gdb")
 		configure("gdb", "halt", gdb_halt)
 	}
 
@@ -324,7 +327,14 @@ retro_load_game :: proc "c" (info: ^retro.game_info) -> c.bool {
 	}
 
 	frame_buffer.memory = make([dynamic]u32, 720 * 480)
-	setup_machine(info)
+	if (info != nil) && strings.has_suffix(string(info.path), ".ini") {
+		if !setup_machine_config(string(info.path)) {
+			log.error("Invalid machine configuration!")
+			return false
+		}
+	} else {
+		setup_default_machine(info)
+	}
 
 	show_message("Ensure you have 'Game Focus' mode set to 'Detect' under Setting > Input, or press the 'Scroll Lock' key", 6 * time.Second)
 	return true
@@ -383,7 +393,7 @@ retro_get_system_info :: proc "c" (info: ^retro.system_info) {
 		library_version  = VXT_VERSION,
 		block_extract    = true,
 		need_fullpath    = true,
-		valid_extensions = "img",
+		valid_extensions = "img|ini",
 	}
 }
 

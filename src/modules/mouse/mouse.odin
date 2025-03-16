@@ -24,6 +24,7 @@
 package mouse
 
 import "core:log"
+import "core:slice"
 
 import retro "vxt:frontend/libretro"
 import retro_callbacks "vxt:frontend/libretro/callbacks"
@@ -134,4 +135,29 @@ timer :: proc(using mouse: ^Mouse, _: peripheral.Peripheral_Timer_ID, _: uint) {
 push_data :: proc(mouse: ^Mouse, data: byte) {
 	append(&mouse.buffer, data)
 	peripheral.peripheral_interface.interrupt(mouse.irq)
+}
+
+@(init)
+mouse :: proc() {
+	peripheral.register_constructor(proc(_: string) {
+		mouse, cb := peripheral.allocate(Mouse)
+		mouse.base_port = 0x3F8
+		mouse.irq = 4
+
+		cb.install = install
+		cb.timer = timer
+		cb.config = config
+		cb.io_in = io_in
+		cb.io_out = io_out
+
+		cb.name = proc(_: ^Mouse) -> string {
+			return "Serial Microsoft Mouse"
+		}
+
+		cb.reset = proc(using mouse: ^Mouse) -> bool {
+			slice.zero(registers[:])
+			button_state = 0
+			return true
+		}
+	})
 }

@@ -108,6 +108,20 @@ reset :: proc() -> bool {
 	return true
 }
 
+instantiate :: proc(mod_name: string, inst_name := "") -> (found: bool) {
+	for c in peripheral.peripheral_manager.constructors {
+		if c.procedure == nil {
+			return
+		}
+
+		if c.mod_name == mod_name {
+			found = true
+			c.procedure((inst_name != "") ? inst_name : mod_name)
+		}
+	}
+	return
+}
+
 configure :: proc(id, key: string, value: any) -> bool {
 	if id == "machine" {
 		if key == "cpu_frequency" {

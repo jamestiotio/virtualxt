@@ -25,6 +25,7 @@ package rom
 
 import "core:log"
 import "core:slice"
+import "core:strconv"
 
 import "vxt:machine/peripheral"
 
@@ -45,7 +46,14 @@ config :: proc(rom: ^ROM, name, key: string, value: any) -> bool {
 	case "mem":
 		rom.mem = slice.clone(value.([]byte))
 	case "base":
-		rom.base = value.(u32)
+		switch v in value {
+		case u32:
+			rom.base = v
+		case string:
+			n, ok := strconv.parse_uint(v)
+			assert(ok)
+			rom.base = u32(n)
+		}
 		assert(rom.base & 0x7FF == 0, "ROM must be 2K aligned")
 	case:
 		return false
@@ -72,4 +80,20 @@ write :: proc(rom: ^ROM, _: u32, _: byte) {
 
 destroy :: proc(rom: ^ROM) {
 	delete(rom.mem)
+}
+
+@(init)
+rom :: proc() {
+	peripheral.register_constructor(proc(id: string) {
+		rom, cb := peripheral.allocate(ROM)
+		rom.id = id
+		rom.name = "ROM"
+
+		cb.install = install
+		cb.config = config
+		cb.read = read
+		cb.write = write
+		cb.name = name
+		cb.destroy = destroy
+	})
 }

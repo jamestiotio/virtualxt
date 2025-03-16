@@ -25,6 +25,7 @@ import "core:log"
 import "core:reflect"
 
 MAIN_OSCILLATOR :: 14318180
+MAX_PERIPHERALS :: 64
 
 Peripheral_Timer_ID :: int
 
@@ -61,7 +62,8 @@ Peripheral_Callbacks :: struct($ty: typeid) {
 	},
 }
 
-Peripheral :: struct {}
+Peripheral :: struct {
+}
 
 @(private = "file")
 Internal_Peripheral :: struct($ty: typeid) {
@@ -90,10 +92,14 @@ peripheral_interface: struct {
 }
 
 peripheral_manager: struct {
-	peripherals: [dynamic]^Peripheral_Callbacks(Peripheral),
-	timers:      [dynamic]Timer_Internal,
-	memory_map:  [0x10000]u8,
-	io_map:      [0x10000]u8,
+	peripherals:  [dynamic]^Peripheral_Callbacks(Peripheral),
+	timers:       [dynamic]Timer_Internal,
+	constructors: [MAX_PERIPHERALS]struct {
+		mod_name:  string,
+		procedure: proc(inst_name: string),
+	},
+	memory_map:   [0x10000]u8,
+	io_map:       [0x10000]u8,
 }
 
 @(private = "file")
@@ -174,6 +180,16 @@ register_io_address_at :: proc(p: any, port: u16) {
 	pint := get_internal(p)
 	assert(pint.tid == reflect.typeid_elem(p.id))
 	peripheral_manager.io_map[port] = u8(pint.pidx)
+}
+
+register_constructor :: proc(f: proc(_: string), loc := #caller_location) {
+	for &c in peripheral_manager.constructors {
+		if c.procedure == nil {
+			c = {loc.procedure, f}
+			return
+		}
+	}
+	panic("Too many constructors registred!")
 }
 
 register_timer :: proc(p: any, us: uint = 0) -> Peripheral_Timer_ID {

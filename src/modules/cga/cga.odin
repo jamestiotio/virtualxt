@@ -23,6 +23,8 @@
 
 package cga
 
+import "core:math/rand"
+
 import "vxt:machine/peripheral"
 
 MEMORY_SIZE :: 0x10000
@@ -206,4 +208,26 @@ reset :: proc(using cga: ^CGA) -> bool {
 	status_reg = 0
 
 	return true
+}
+
+@(init)
+cga :: proc() {
+	peripheral.register_constructor(proc(_: string) {
+		cga, cb := peripheral.allocate(CGA)
+		_ = rand.read(cga.mem[:])
+
+		cb.class = .VIDEO
+		cb.install = install
+		cb.config = config
+		cb.timer = timer
+		cb.read = read
+		cb.write = write
+		cb.io_in = io_in
+		cb.io_out = io_out
+		cb.reset = reset
+
+		cb.name = proc(_: ^CGA) -> string {
+			return "CGA Compatible Video Adapter"
+		}
+	})
 }

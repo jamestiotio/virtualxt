@@ -27,6 +27,7 @@ import "core:log"
 import "core:strings"
 
 import retro "vxt:frontend/libretro"
+import retro_callbacks "vxt:frontend/libretro/callbacks"
 import "vxt:machine/peripheral"
 
 BOOTSECTOR_ADDRESS :: 0x7C00
@@ -42,7 +43,6 @@ Drive :: struct {
 }
 
 Disk :: struct {
-	vfs:                        ^retro.vfs_interface,
 	boot_drive, num_hd, num_fd: byte,
 	drives:                     [0x100]Drive,
 }
@@ -56,7 +56,7 @@ install :: proc(disk: ^Disk) -> bool {
 destroy :: proc(disk: ^Disk) {
 	for &drive in disk.drives {
 		if drive.fp != nil {
-			disk.vfs.close(drive.fp)
+			retro_callbacks.vfs.close(drive.fp)
 		}
 	}
 }
@@ -67,17 +67,17 @@ execute_operation :: proc(disk: ^Disk, drive: ^Drive, read: bool, addr: u32, cyl
 	}
 
 	lba := (i64(cylinders) * i64(drive.heads) + i64(heads)) * i64(drive.sectors) + i64(sectors) - 1
-	if disk.vfs.seek(drive.fp, lba * SECTOR_SIZE, retro.VFS_SEEK_POSITION_START) != 0 {
+	if retro_callbacks.vfs.seek(drive.fp, lba * SECTOR_SIZE, retro.VFS_SEEK_POSITION_START) != 0 {
 		return
 	}
-	defer disk.vfs.flush(drive.fp)
+	defer retro_callbacks.vfs.flush(drive.fp)
 
 	buffer: [SECTOR_SIZE]byte
 	for num < count {
 		offset := addr + (u32(num) * SECTOR_SIZE)
 
 		if read {
-			if disk.vfs.read(drive.fp, &buffer[0], SECTOR_SIZE) != SECTOR_SIZE {
+			if retro_callbacks.vfs.read(drive.fp, &buffer[0], SECTOR_SIZE) != SECTOR_SIZE {
 				return
 			}
 			for data in buffer {
@@ -89,7 +89,7 @@ execute_operation :: proc(disk: ^Disk, drive: ^Drive, read: bool, addr: u32, cyl
 				data = peripheral.peripheral_interface.read(offset)
 				offset += 1
 			}
-			if disk.vfs.write(drive.fp, &buffer[0], SECTOR_SIZE) != SECTOR_SIZE {
+			if retro_callbacks.vfs.write(drive.fp, &buffer[0], SECTOR_SIZE) != SECTOR_SIZE {
 				return
 			}
 		}
@@ -133,9 +133,9 @@ open_disk_image :: proc(disk: ^Disk, path: string) -> ^retro.vfs_file_handle {
 	cpath := strings.clone_to_cstring(path)
 	defer delete(cpath)
 
-	fp := disk.vfs.open(cpath, VFS_FILE_ACCESS_READ_WRITE | VFS_FILE_ACCESS_UPDATE_EXISTING, VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS)
+	fp := retro_callbacks.vfs.open(cpath, VFS_FILE_ACCESS_READ_WRITE | VFS_FILE_ACCESS_UPDATE_EXISTING, VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS)
 	if fp == nil {
-		if fp = disk.vfs.open(cpath, VFS_FILE_ACCESS_READ, VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS); fp == nil {
+		if fp = retro_callbacks.vfs.open(cpath, VFS_FILE_ACCESS_READ, VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS); fp == nil {
 			log.panicf("Could not open disk image file: %s", path)
 		}
 		log.warnf("Open file as read-only: %s", path)
@@ -145,7 +145,7 @@ open_disk_image :: proc(disk: ^Disk, path: string) -> ^retro.vfs_file_handle {
 
 mount_disk :: proc(disk: ^Disk, disk_num: byte, path: string) {
 	file_ptr := open_disk_image(disk, path)
-	file_size := uint(disk.vfs.size(file_ptr))
+	file_size := uint(retro_callbacks.vfs.size(file_ptr))
 
 	using drive: Drive
 	fp = file_ptr
@@ -211,8 +211,6 @@ config :: proc(disk: ^Disk, name, key: string, value: any) -> bool {
 	}
 
 	switch key {
-	case "vfs":
-		disk.vfs = value.(^retro.vfs_interface)
 	case "mounted":
 		status := value.(^byte)
 		status^ = (disk.drives[status^].fp != nil) ? 1 : 0
@@ -223,7 +221,7 @@ config :: proc(disk: ^Disk, name, key: string, value: any) -> bool {
 			return false
 		}
 		if drive := &disk.drives[num]; drive.fp != nil {
-			disk.vfs.close(drive.fp)
+			retro_callbacks.vfs.close(drive.fp)
 			drive^ = Drive{}
 			disk.num_fd -= 1
 		} else {
@@ -317,4 +315,29 @@ io_out :: proc(disk: ^Disk, port: u16, _: byte) {
 	if drive.is_hd {
 		peripheral.peripheral_interface.write(peripheral.address(0x40, 0x74), ah)
 	}
+}
+
+@(init)
+disk :: proc() {
+	peripheral.register_constructor(proc(_: string) {
+		_, cb := peripheral.allocate(Disk)
+
+		cb.install = install
+		cb.destroy = destroy
+		cb.config = config
+		cb.io_in = io_in
+		cb.io_out = io_out
+
+		cb.name = proc(_: ^Disk) -> string {
+			return "Disk Controller"
+		}
+
+		cb.reset = proc(disk: ^Disk) -> bool {
+			for &drive in disk.drives {
+				drive.status = 0
+				drive.error = false
+			}
+			return true
+		}
+	})
 }

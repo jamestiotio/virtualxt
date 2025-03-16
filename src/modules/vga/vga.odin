@@ -24,6 +24,7 @@
 package vga
 
 import "core:log"
+import "core:math/rand"
 
 import "vxt:machine/peripheral"
 
@@ -34,21 +35,21 @@ CGA_BASE :: 0x18000
 CURSOR_TIMING :: 333333
 
 VGA :: struct {
-	mem:                           [MEMORY_SIZE]byte,
-	is_dirty:                      bool,
-	frame_buffer:                  []u32,
-	modeset_callback:              proc(_: uint, _: uint),
-	cursor_blink, cursor_visible:  bool,
-	cursor_start, cursor_end:      byte,
-	cursor_offset:                 u16,
+	mem:                                          [MEMORY_SIZE]byte,
+	is_dirty:                                     bool,
+	frame_buffer:                                 []u32,
+	modeset_callback:                             proc(_: uint, _: uint),
+	cursor_blink, cursor_visible:                 bool,
+	cursor_start, cursor_end:                     byte,
+	cursor_offset:                                u16,
 	scanline_timer, retrace_timer, refresh_timer: peripheral.Peripheral_Timer_ID,
-	scanline:                      uint,
-	width, height:                 uint,
-	bpp:                           byte,
-	textmode:                      bool,
-	mem_latch:                     [4]byte,
-	palette:                       [0x100]u32,
-	regs:                          struct {
+	scanline:                                     uint,
+	width, height:                                uint,
+	bpp:                                          byte,
+	textmode:                                     bool,
+	mem_latch:                                    [4]byte,
+	palette:                                      [0x100]u32,
+	regs:                                         struct {
 		feature_ctrl_reg, status_reg:                                     byte,
 		flip_3C0:                                                         bool,
 		misc_output, vga_enable, pixel_mask:                              byte,
@@ -153,7 +154,7 @@ install :: proc(vga: ^VGA) -> bool {
 	switches: byte
 	peripheral_interface.configure("chipset", "get_switches", &switches)
 	peripheral_interface.configure("chipset", "set_switches", switches & 0xCF)
-	
+
 	return true
 }
 
@@ -191,7 +192,7 @@ read :: proc(using vga: ^VGA, addr: u32) -> byte {
 	mem_latch[3] = mem[sanitaze_address(mstart + PLANE_SIZE * 3)]
 
 	data: byte
-	if bool(regs.seq_reg[5] & 8) { // Readmode 1
+	if bool(regs.seq_reg[5] & 8) { 	// Readmode 1
 		map_mask := regs.seq_reg[2] & 0xF
 		for i: u32; i < 4; i += 1 {
 			m: byte = 1 << i
@@ -201,7 +202,7 @@ read :: proc(using vga: ^VGA, addr: u32) -> byte {
 				}
 			}
 		}
-	} else { // Readmode 0
+	} else { 	// Readmode 0
 		data = mem_latch[regs.gfx_reg[4] & 3]
 	}
 	return data
@@ -230,54 +231,58 @@ write :: proc(using vga: ^VGA, addr: u32, data: byte) {
 
 	logic_op :: proc(gc: []byte, data, latch: byte) -> byte {
 		switch (gc[3] >> 3) & 3 {
-			case 1: return data & latch
-			case 2: return data | latch
-			case 3: return data ~ latch
-			case: return data
+		case 1:
+			return data & latch
+		case 2:
+			return data | latch
+		case 3:
+			return data ~ latch
+		case:
+			return data
 		}
 	}
 
 	switch gr[5] & 3 {
-		case 0:
-			rdata := rotate_op(gr, data)
-			for i: u32; i < 4; i += 1 {
-				m: byte = 1 << i
-				if bool(map_mask & m) {
-					value: byte
-					if bool(gr[1] & m) {
-						value = bool(gr[0] & m) ? 0xFF : 0
-					} else {
-						value = rotate_op(gr, rdata)
-					}
-					value = logic_op(gr, value, mem_latch[i])
-					mem[sanitaze_address(mstart + PLANE_SIZE * i)] = (bit_mask & value) | (~bit_mask & mem_latch[i])
+	case 0:
+		rdata := rotate_op(gr, data)
+		for i: u32; i < 4; i += 1 {
+			m: byte = 1 << i
+			if bool(map_mask & m) {
+				value: byte
+				if bool(gr[1] & m) {
+					value = bool(gr[0] & m) ? 0xFF : 0
+				} else {
+					value = rotate_op(gr, rdata)
 				}
+				value = logic_op(gr, value, mem_latch[i])
+				mem[sanitaze_address(mstart + PLANE_SIZE * i)] = (bit_mask & value) | (~bit_mask & mem_latch[i])
 			}
-		case 1:
-			for i: u32; i < 4; i += 1 {
-				m: byte = 1 << i
-				if bool(map_mask & m) {
-					mem[sanitaze_address(mstart + PLANE_SIZE * i)] = mem_latch[i]
-				}
+		}
+	case 1:
+		for i: u32; i < 4; i += 1 {
+			m: byte = 1 << i
+			if bool(map_mask & m) {
+				mem[sanitaze_address(mstart + PLANE_SIZE * i)] = mem_latch[i]
 			}
-		case 2:
-			for i: u32; i < 4; i += 1 {
-				m: byte = 1 << i
-				if bool(map_mask & m) {
-					value: byte = bool(data & m) ? 0xFF : 0
-					value = logic_op(gr, value, mem_latch[i])
-					mem[sanitaze_address(mstart + PLANE_SIZE * i)] = (bit_mask & value) | (~bit_mask & mem_latch[i])
-				}
+		}
+	case 2:
+		for i: u32; i < 4; i += 1 {
+			m: byte = 1 << i
+			if bool(map_mask & m) {
+				value: byte = bool(data & m) ? 0xFF : 0
+				value = logic_op(gr, value, mem_latch[i])
+				mem[sanitaze_address(mstart + PLANE_SIZE * i)] = (bit_mask & value) | (~bit_mask & mem_latch[i])
 			}
-		case 3:
-			value := rotate_op(gr, data) & bit_mask
-			for i: u32; i < 4; i += 1 {
-				m: byte = 1 << i
-				if bool(map_mask & m) {
-					set_reset: byte = bool(gr[0] & m) ? 0xFF : 0
-					mem[sanitaze_address(mstart + PLANE_SIZE * i)] = (value & set_reset) | (~value & mem_latch[i])
-				}
+		}
+	case 3:
+		value := rotate_op(gr, data) & bit_mask
+		for i: u32; i < 4; i += 1 {
+			m: byte = 1 << i
+			if bool(map_mask & m) {
+				set_reset: byte = bool(gr[0] & m) ? 0xFF : 0
+				mem[sanitaze_address(mstart + PLANE_SIZE * i)] = (value & set_reset) | (~value & mem_latch[i])
 			}
+		}
 	}
 }
 
@@ -437,4 +442,26 @@ reset :: proc(vga: ^VGA) -> bool {
 	vga.is_dirty = true
 	vga.regs.status_reg = 0
 	return true
+}
+
+@(init)
+vga :: proc() {
+	peripheral.register_constructor(proc(_: string) {
+		vga, cb := peripheral.allocate(VGA)
+		_ = rand.read(vga.mem[:])
+
+		cb.class = .VIDEO
+		cb.install = install
+		cb.config = config
+		cb.timer = timer
+		cb.read = read
+		cb.write = write
+		cb.io_in = io_in
+		cb.io_out = io_out
+		cb.reset = reset
+
+		cb.name = proc(_: ^VGA) -> string {
+			return "VGA Compatible Video Adapter"
+		}
+	})
 }
