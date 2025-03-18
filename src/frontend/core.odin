@@ -23,7 +23,6 @@ package frontend
 
 import "base:runtime"
 import "core:c"
-import "core:encoding/ini"
 import "core:log"
 import "core:strings"
 import "core:time"
@@ -214,7 +213,31 @@ retro_reset :: proc "c" () {
 setup_machine_config :: proc(config_path: string) -> bool {
 	using machine
 
-	config, _ := ini.load_map_from_path(config_path, context.temp_allocator) or_return
+	cpath := strings.clone_to_cstring(config_path)
+	defer delete(cpath)
+
+	fp := retro_callbacks.vfs.open(cpath, retro.VFS_FILE_ACCESS_READ, retro.VFS_FILE_ACCESS_HINT_NONE)
+	if fp == nil {
+		log.errorf("Could not load ROM file: %s", config_path)
+		return false
+	}
+	defer retro_callbacks.vfs.close(fp)
+
+	file_size := retro_callbacks.vfs.size(fp)
+	if file_size <= 0 {
+		log.errorf("Invalid file size (%vB): %s", file_size, config_path)
+		return false
+	}
+
+	ini_data := make([]byte, file_size)
+	defer delete(ini_data)
+	
+	if retro_callbacks.vfs.read(fp, &ini_data[0], u64(file_size)) != file_size {
+		log.errorf("Could not read %vB from: %s", file_size, config_path)
+		return false
+	}
+
+	config := load_ini(string(ini_data)) or_return
 	version := config["virtualxt"]["version"] or_return
 	if version != VXT_VERSION {
 		return false

@@ -206,11 +206,6 @@ step :: proc(cycles: uint, op186 := true) -> (res: Step, ok := true) {
 	return
 }
 
-peripheral_from_class :: proc(class: Peripheral_Class) -> (p: ^Peripheral, ok: bool) {
-	p, _, ok = peripheral.get_peripheral_from_class(class)
-	return
-}
-
 frequency :: proc() -> uint {
 	return cpu_frequency
 }
