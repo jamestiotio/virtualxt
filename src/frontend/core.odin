@@ -282,12 +282,22 @@ setup_default_machine :: proc(info: ^retro.game_info) {
 		configure("bios", "mem", #load("bios:pcxtbios.bin", []byte))
 	}
 
+	if glatick {
+		instantiate("rom", "rtcbios")
+		configure("rtcbios", "name", "RTC BIOS")
+		configure("rtcbios", "base", "0xC8000")
+		configure("rtcbios", "mem", #load("bios:GLaTICK_0.8.4_AT.ROM", []byte))
+		instantiate("rtc")
+	}
+
 	instantiate("rom", "vxtx")
 	configure("vxtx", "name", "Disk Extension")
 	configure("vxtx", "mem", #load("bios:vxtx.bin", []byte))
 	configure("vxtx", "base", "0xFD800")
 
-	instantiate("rifs2")
+	if enable_rifs {
+		instantiate("rifs2")
+	}
 
 	{
 		instantiate("disk")

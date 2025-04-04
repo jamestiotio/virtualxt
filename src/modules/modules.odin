@@ -29,4 +29,5 @@ package modules
 @(require) import "modules:mouse"
 @(require) import "modules:rifs2"
 @(require) import "modules:rom"
+@(require) import "modules:rtc"
 @(require) import "modules:vga"

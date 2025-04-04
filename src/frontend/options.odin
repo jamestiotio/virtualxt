@@ -23,17 +23,19 @@
 
 package frontend
 
+import "core:log"
 import "core:strconv"
 import "core:strings"
-import "core:log"
 
 import retro "vxt:frontend/libretro"
 import retro_callbacks "vxt:frontend/libretro/callbacks"
 import "vxt:machine"
 
 glabios := true
+glatick := true
 enable_vga := false
 enable_ems := true
+enable_rifs := true
 enable_186 := true
 flag_286 := false
 
@@ -49,6 +51,8 @@ options := [?]retro.variable {
 	{"virtualxt_flag_286", "286 flag register; false|true"},
 	{"virtualxt_ems", "EMS memory; true|false"},
 	{"virtualxt_bios", "BIOS; GLaBIOS 0.2.6|TurboXT 3.1"},
+	{"virtualxt_rtc", "RTC; " + ("GLaTICK 0.8.4|none" when ODIN_OS != .Freestanding else "unavailable")},
+	{"virtualxt_rifs", "File share; " + ("true|false" when ODIN_OS != .Freestanding else "unavailable")},
 	{"virtualxt_gdb", "GDB server; " + ("false|true" when #config(VXT_GDBSTUB, false) else "unavailable")},
 	{"virtualxt_gdb_halt", "Wait for debugger; " + ("false|true" when #config(VXT_GDBSTUB, false) else "unavailable")},
 	{},
@@ -108,10 +112,24 @@ check_variables :: proc() {
 	}
 
 	var = retro.variable {
+		key = "virtualxt_rtc",
+	}
+	if (retro_callbacks.environment(retro.ENVIRONMENT_GET_VARIABLE, &var) && (var.value != nil)) {
+		glatick = strings.has_prefix(string(var.value), "GLaTICK")
+	}
+
+	var = retro.variable {
 		key = "virtualxt_ems",
 	}
 	if (retro_callbacks.environment(retro.ENVIRONMENT_GET_VARIABLE, &var) && (var.value != nil)) {
 		enable_ems, _ = strconv.parse_bool(string(var.value))
+	}
+
+	var = retro.variable {
+		key = "virtualxt_rifs",
+	}
+	if (retro_callbacks.environment(retro.ENVIRONMENT_GET_VARIABLE, &var) && (var.value != nil)) {
+		enable_rifs, _ = strconv.parse_bool(string(var.value))
 	}
 
 	var = retro.variable {
