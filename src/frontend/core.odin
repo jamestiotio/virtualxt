@@ -34,6 +34,7 @@ import "core:time"
 @(require) import "modules:gdb"
 @(require) import "modules:mouse"
 @(require) import "modules:rom"
+@(require) import "modules:rtc"
 @(require) import "modules:vga"
 
 import retro "vxt:frontend/libretro"
@@ -231,7 +232,7 @@ setup_machine_config :: proc(config_path: string) -> bool {
 
 	ini_data := make([]byte, file_size)
 	defer delete(ini_data)
-	
+
 	if retro_callbacks.vfs.read(fp, &ini_data[0], u64(file_size)) != file_size {
 		log.errorf("Could not read %vB from: %s", file_size, config_path)
 		return false
@@ -279,6 +280,12 @@ setup_machine_config :: proc(config_path: string) -> bool {
 
 setup_default_machine :: proc(info: ^retro.game_info) {
 	using machine
+
+	instantiate("rom", "rtcbios")
+	configure("rtcbios", "name", "RTC BIOS")
+	configure("rtcbios", "base", "0xC8000")
+	configure("rtcbios", "mem", #load("bios:GLaTICK_0.8.4_AT.ROM", []byte))
+	instantiate("rtc")
 
 	instantiate("rom", "bios")
 	configure("bios", "name", "BIOS")
