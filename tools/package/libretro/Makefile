@@ -3,7 +3,7 @@ AR             := ar
 ODIN_VERSION   := dev-2025-04
 TARGET_NAME    := virtualxt
 CORE_DIR       := ../../../
-ODIN_UNPACK    := unzip odin.zip
+ODIN_UNPACK    := unzip odin.zip && tar -xf dist.tar.gz -C ./odin --strip-components=1
 ODIN_MKTARGET  := object
 
 ifneq ($(V),1)
