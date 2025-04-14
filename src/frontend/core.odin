@@ -183,8 +183,10 @@ retro_set_environment :: proc "c" (cb: retro.environment_t) {
 
 			builder := strings.builder_from_bytes(log_buffer[:])
 			strings.write_string(&builder, text)
-			log_buffer[LOG_BUFFER_SIZE - 1] = 0 // Ensure we always are terminated.
-			log_printf_t(data)(lv, "%s\n", strings.to_cstring(&builder))
+			cstr, err := strings.to_cstring(&builder)
+			assert(err == nil)
+
+			log_printf_t(data)(lv, "%s\n", cstr)
 		}
 
 		rt.default_context.logger = runtime.Logger{logger_proc, rawptr(logging.log), .Debug, nil}
