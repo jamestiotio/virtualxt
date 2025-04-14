@@ -15,7 +15,7 @@ concurrency:
     cancel-in-progress: true
 
 env:
-    ODIN_VERSION: dev-2025-02
+    ODIN_VERSION: dev-2025-04
 
 jobs:
     linux-tests:
