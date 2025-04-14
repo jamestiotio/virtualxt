@@ -30,9 +30,9 @@ jobs:
               run: |
                   rm -rf odin; mkdir odin
                   curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default && unzip butler.zip -d butler
-                  curl -L -o odin.zip https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-ubuntu-amd64-${ODIN_VERSION}.zip && unzip odin.zip
+                  curl -L -o odin.zip https://github.com/odin-lang/Odin/releases/download/${ODIN_VERSION}/odin-ubuntu-amd64-${ODIN_VERSION}.zip && unzip odin.zip && tar -xf dist.tar.gz -C ./odin --strip-components=1
                   echo "${GITHUB_WORKSPACE}/butler" >> $GITHUB_PATH
-                  echo "${GITHUB_WORKSPACE}/odin-ubuntu-amd64-${ODIN_VERSION}" >> $GITHUB_PATH
+                  echo "${GITHUB_WORKSPACE}/odin" >> $GITHUB_PATH
 
             - name: Test
               run: make tests
