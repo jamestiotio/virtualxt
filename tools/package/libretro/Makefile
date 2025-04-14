@@ -24,7 +24,7 @@ ifeq ($(platform),)
 endif
 
 # system platform
-system_odin = linux-amd64
+system_odin = ubuntu-amd64
 ifeq ($(shell uname -a),)
 	system_odin = windows-amd64
 else ifneq ($(findstring Darwin,$(shell uname -a)),)
