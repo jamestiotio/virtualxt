@@ -155,7 +155,7 @@ else ifneq (,$(findstring msvc,$(platform)))
    TARGET := $(TARGET_NAME)_libretro.dll
    ODIN_FLAGS += -target:windows_amd64
    ODIN_MKTARGET = release
-   ODIN_UNPACK = powershell -command "Expand-Archive -Force odin.zip ."
+   ODIN_UNPACK = powershell -command "Expand-Archive -Force odin.zip ./odin"
    STATIC_LINKING=0
 else
    TARGET := $(TARGET_NAME)_libretro.dll

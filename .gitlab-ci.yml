@@ -57,7 +57,6 @@ stages:
 # Windows msvc10 64-bit
 libretro-build-windows-msvc10-x64:
   only:
-    - develop
     - edge
     - release
   extends:
@@ -67,7 +66,6 @@ libretro-build-windows-msvc10-x64:
 # Linux 64-bit
 libretro-build-linux-x64:
   only:
-    - develop
     - edge
     - release
   extends:
@@ -86,7 +84,6 @@ libretro-build-linux-x64:
 # MacOS ARM 64-bit
 libretro-build-osx-arm64:
   only:
-    - develop
     - edge
     - release
   extends:
@@ -106,7 +103,6 @@ libretro-build-osx-arm64:
 # Android ARMv8a
 android-arm64-v8a:
   only:
-    - develop
     - edge
     - release
   extends:
@@ -116,7 +112,6 @@ android-arm64-v8a:
 # iOS
 libretro-build-ios-arm64:
   only:
-    - develop
     - edge
     - release
   extends:
@@ -127,7 +122,6 @@ libretro-build-ios-arm64:
 # Emscripten
 libretro-build-emscripten:
   only:
-    - develop
     - edge
     - release
   extends:
