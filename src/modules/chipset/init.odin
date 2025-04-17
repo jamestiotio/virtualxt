@@ -84,6 +84,7 @@ chipset :: proc() {
 			cb.reset = proc(ppi: ^PPI) -> bool {
 				ppi^ = PPI {
 					xt_switches = ppi.xt_switches,
+					audio_freq  = ppi.audio_freq,
 					pit         = ppi.pit,
 				}
 				return true
