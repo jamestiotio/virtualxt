@@ -59,6 +59,17 @@ else ifeq ($(platform), linux-portable)
 
    # NOTE: We only support linux amd64 atm.
    ODIN_TARGET = freestanding_amd64_sysv
+else ifneq (,$(findstring rpi,$(platform)))
+   EXT ?= so
+   TARGET := $(TARGET_NAME)_libretro.$(EXT)
+   fpic := -fPIC
+   SHARED := -shared -Wl,--no-undefined
+
+   ifeq ($(ARCH), aarch64)
+    	ODIN_TARGET = linux_arm64
+   else
+		ODIN_TARGET = linux_arm32
+   endif
 else ifneq (,$(findstring android,$(platform)))
    TARGET := $(TARGET_NAME)_libretro_android.so
    fpic := -fPIC
