@@ -25,6 +25,7 @@ package rifs2
 
 import "core:container/queue"
 import "core:slice"
+import "core:mem"
 import "core:strings"
 import "core:log"
 
@@ -32,6 +33,8 @@ import "vxt:machine/peripheral"
 
 import retro "vxt:frontend/libretro"
 import retro_callbacks "vxt:frontend/libretro/callbacks"
+
+PAYLOAD_MAX_SIZE :: 0x10000
 
 Response :: enum u16 {
 	OK = 0x0,
@@ -41,6 +44,9 @@ Response :: enum u16 {
 	INVALID_HANDLE = 0x6,
 	NO_MORE_FILES = 0xC,
 	UNKNOWN = 0x16,
+	SEEK_ERROR = 0x19,
+	WRITE_ERROR = 0x1D,
+	READ_ERROR = 0x1E,
 }
 
 Command :: enum u16 {
@@ -94,8 +100,11 @@ FS :: struct {
 	registers:                 [8]byte,
 	dlab:                      bool,
 	root_path: 				   string,
-	input_queue, output_queue: queue.Queue(byte),
 	dos_processes:             [dynamic]Process,
+	input_queue, output_queue: queue.Queue(byte),
+
+	// Buffers for package assembly.
+	input_buffer, output_buffer: [size_of(Packet) + PAYLOAD_MAX_SIZE]byte,
 }
 
 config :: proc(fs: ^FS, name, key: string, value: any) -> bool {
@@ -105,7 +114,7 @@ config :: proc(fs: ^FS, name, key: string, value: any) -> bool {
 install :: proc(using fs: ^FS) -> bool {
 	peripheral.register_io_address_range(fs, base_port, base_port + 7)
 	queue.init(&input_queue)
-	queue.init(&output_queue)
+	queue.init(&output_queue)	
 	return true
 }
 
@@ -133,7 +142,12 @@ packet_payload :: proc(pk: ^Packet) -> []byte {
 }
 
 packet_payload_as :: proc(pk: ^Packet, $ty: typeid) -> ^ty {
-	return (^ty)(&packet_payload(pk)[0])
+	return payload_as(packet_payload(pk), ty)
+}
+
+payload_as :: proc(payload: []byte, $ty: typeid) -> ^ty {
+	assert(size_of(ty) <= len(payload))
+	return (^ty)(&payload[0])
 }
 
 transform_path :: proc(fs: ^FS, path: string) -> string {
@@ -169,124 +183,166 @@ get_process :: proc(fs: ^FS, id: u16) -> ^Process {
 		return inactive
 	}
 	
-	idx := append(&fs.dos_processes, Process{active = true, process_id = id})
+	idx := append(&fs.dos_processes, Process{active = true, process_id = id}) - 1
 	return &fs.dos_processes[idx]
 }
 
-process_request :: proc(using fs: ^FS, pk: ^Packet) {
+process_request :: proc(using fs: ^FS, pk: ^Packet, buffer: []byte) -> (resp := Response.OK, payload_size := 0) {
 	switch pk.cmd {
 	case .RMDIR:
 		path := null_terminated_string(packet_payload(pk))
-		pk.resp = host_rmdir(transform_path(fs, path))
-		server_response(fs, pk)
+		resp = host_rmdir(transform_path(fs, path))
+		return
 	case .MKDIR:
 		path := null_terminated_string(packet_payload(pk))
-		pk.resp = host_mkdir(transform_path(fs, path))
-		server_response(fs, pk)
+		resp = host_mkdir(transform_path(fs, path))
+		return
 	case .CHDIR:
 		path := null_terminated_string(packet_payload(pk))
-		pk.resp = host_exists(transform_path(fs, path)) ? .OK : .PATH_NOT_FOUND
-		server_response(fs, pk)
+		resp = host_exists(transform_path(fs, path)) ? .OK : .PATH_NOT_FOUND
+		return
 	case .GETSPACE:
 		// TODO: We just fake this and say we always have 32Mb of free space. :D
 
-		dest := packet_payload_as(pk, struct #packed {
+		using data := payload_as(buffer, struct #packed {
 			sectors_per_cluster, total_clusters, bytes_per_sector, available_clusters: u16,
 		})
 
-		dest.sectors_per_cluster = 1024
-		dest.total_clusters = 64
-		dest.bytes_per_sector = 512
-		dest.available_clusters = 63
+		sectors_per_cluster = 1024
+		total_clusters = 64
+		bytes_per_sector = 512
+		available_clusters = 63
 
-		pk.resp = .OK
-		server_response(fs, pk, 8)
+		payload_size = 8
+		return
 	case .SETATTR:
 		path := null_terminated_string(packet_payload(pk)[2:])
-		pk.resp = host_exists(transform_path(fs, path)) ? .OK : .FILE_NOT_FOUND
-		server_response(fs, pk)
+		resp = host_exists(transform_path(fs, path)) ? .OK : .FILE_NOT_FOUND
+		return
 	case .GETATTR:
-		data := packet_payload(pk)
-		path := transform_path(fs, null_terminated_string(data))
-
+		path := transform_path(fs, null_terminated_string(packet_payload(pk)))
 		if host_exists(path) {
-			pk.resp = .OK
-			(^u16)(&data[0])^ = host_is_dir(path) ? 0x10 : 0
-			server_response(fs, pk, 2)
+			payload_as(buffer, u16)^ = host_is_dir(path) ? 0x10 : 0
+			payload_size = 2
 		} else {
-			pk.resp = .FILE_NOT_FOUND
-			server_response(fs, pk)
+			resp = .FILE_NOT_FOUND
 		}
+		return
 	case .RENAMEFILE:
 		data := packet_payload(pk)
 		old_name := transform_path(fs, null_terminated_string(data))
 		new_name := transform_path(fs, null_terminated_string(data[len(old_name) + 1:]))
 
-		pk.resp = host_rename(transform_path(fs, old_name), transform_path(fs, new_name))
-		server_response(fs, pk)
+		resp = host_rename(transform_path(fs, old_name), transform_path(fs, new_name))
+		return
 	case .DELETEFILE:
 		path := null_terminated_string(packet_payload(pk))
-		pk.resp = host_delete(transform_path(fs, path))
-		server_response(fs, pk)
+		resp = host_delete(transform_path(fs, path))
+		return
 	case .CLOSEFILE:
 		idx := packet_payload_as(pk, u16)^
 		p := get_process(fs, pk.process_id)
 		
 		if (int(idx) >= len(p.files)) || (p.files[idx] == nil) {
-			pk.resp = .INVALID_HANDLE
+			resp = .INVALID_HANDLE
 		} else {
 			fp := &p.files[idx]
 			retro_callbacks.vfs.close(fp^)
-			fp = nil
-			pk.resp = .OK
+			fp^ = nil
 		}
-		server_response(fs, pk)
+		return
 	case .CLOSEALL:
 		p := get_process(fs, pk.process_id)
 		p.active = false
 		
-		for &fp in p.files {
+		for fp in p.files {
 			if fp != nil {
 				retro_callbacks.vfs.close(fp)
 			}
 		}
 		clear(&p.files)
-	case .READFILE, .WRITEFILE, .OPENFILE, .CREATEFILE, .FINDFIRST, .FINDNEXT:
+		return
+	case .OPENFILE, .CREATEFILE:
+		attrib := (pk.cmd == .OPENFILE) ? packet_payload_as(pk, u16)^ : 1
+		path := null_terminated_string(packet_payload(pk)[2:])
+		process := get_process(fs, pk.process_id)		
+		
+		resp = host_openfile(process, transform_path(fs, path), attrib, buffer)
+		payload_size = (resp == .OK) ? 12 : 0
+		return
+	case .READFILE, .WRITEFILE:
+		using data := packet_payload_as(pk, struct #packed {
+			handle: u16,
+			pos: u32,
+			size: u16,
+		})^
+
+		// Will be at least 2
+		payload_size = 2
+		result := payload_as(buffer, u16)
+		result^ = 0
+
+		process := get_process(fs, pk.process_id)
+		if (int(handle) >= len(process.files)) || (process.files[handle] == nil) {
+			log.warnf("READ/WRITEFILE: Invalid Handle (0x%X)", handle)
+			resp = .INVALID_HANDLE
+			return
+		}
+
+		fp := process.files[handle]
+		if retro_callbacks.vfs.seek(fp, i64(pos), retro.VFS_SEEK_POSITION_START) < 0 {
+			log.warn("READ/WRITEFILE: Seek Error")
+			resp = .SEEK_ERROR
+			return
+		}
+
+		num: int
+		if pk.cmd == .READFILE {
+			if num = int(retro_callbacks.vfs.read(fp, &buffer[2], u64(size))); num < 0 {
+				log.warn("READFILE: Read Error")
+				resp = .READ_ERROR
+				return
+			}
+		} else {
+			if num = int(retro_callbacks.vfs.write(fp, &packet_payload(pk)[8], u64(size))); num < 0 {
+				log.warn("WRITEFILE: Write Error")
+				resp = .WRITE_ERROR
+				return
+			}
+		}
+
+		payload_size += num
+		result^ = u16(num)
+		return
+	case .FINDFIRST, .FINDNEXT:
 		log.errorf("NOT IMPLEMENTED", pk.cmd)
-		pk.resp = .UNKNOWN // Unknown command
-		server_response(fs, pk)
+		resp = .UNKNOWN // Unknown command
+		return
 	case .COMMITFILE, .LOCKFILE, .UNLOCKFILE:
-		pk.resp = .OK
-		server_response(fs, pk)
+		return
 	case .EXTOPEN:
 		// TODO
 		fallthrough
 	case:
 		log.errorf("Unknown RIFS command: %v (payload size %d)", pk.cmd, pk.length)
-		pk.resp = .UNKNOWN // Unknown command
-		server_response(fs, pk)
+		resp = .UNKNOWN // Unknown command
+		return
 	}
 }
 
-// Expects the 'cmd' and 'process_id' to be set by caller.
-server_response :: proc(fs: ^FS, pk: ^Packet, payload_size := 0) {
-	size := size_of(Packet) + payload_size
+server_response :: proc(fs: ^FS, id: u16, resp: Response, buffer: []byte) {
+	p := (^Packet)(&buffer[0])
+	p.process_id = id
+	p.packetID = {'L', 'Y'}
+	p.resp = resp
+	p.length = u16(len(buffer))
+	p.notlength = ~p.length
+	p.crc32 = 0
 	
-	queue.clear(&fs.input_queue)
-	for data in slice.bytes_from_ptr(pk, size) {
-		queue.push(&fs.input_queue, data)
+	p.crc32 = crc32(p, p.length)
+	for b in buffer {
+		queue.push(&fs.input_queue, b)
 	}
-	
-	dest := (^Packet)(queue.front_ptr(&fs.input_queue))
-	
-	dest.length = u16(size)
-	dest.notlength = ~dest.length
-
-	dest.packetID[0] = 'L'
-	dest.packetID[1] = 'Y'
-
-	dest.crc32 = 0
-	dest.crc32 = crc32(dest, dest.length)	
 }
 
 destroy :: proc(fs: ^FS) {
@@ -338,13 +394,29 @@ io_out :: proc(using fs: ^FS, port: u16, data: byte) {
 		}
 
 		queue.push_back(&output_queue, data)
-		if queue.len(output_queue) >= size_of(Packet) {
+		output_queue_len := queue.len(output_queue)
+		
+		if output_queue_len >= size_of(Packet) {
+			// TODO: Perhaps cache this somehow?
+			for i := 0; i < size_of(Packet); i += 1 {
+				output_buffer[i] = queue.get(&output_queue, i)
+			}
+		
 			// Is packet ready?
-			if p := (^Packet)(queue.front_ptr(&output_queue)); int(p.length) == queue.len(output_queue) {
-				if verify_packet(p) {
-					process_request(fs, p)
+			if p := (^Packet)(&output_buffer[0]); output_queue_len >= int(p.length) {
+				// Packet header is already copied.
+				queue.consume_front(&output_queue, size_of(Packet))
+
+				// Copy payload.
+				for i := 0; i < (int(p.length) - size_of(Packet)); i += 1 {
+					output_buffer[size_of(Packet) + i] = queue.pop_front(&output_queue)
 				}
-				queue.clear(&output_queue)
+				
+				if verify_packet(p) {
+					mem.copy(&fs.input_buffer[0], p, size_of(Packet))
+					resp, sz := process_request(fs, p, fs.input_buffer[size_of(Packet):])
+					server_response(fs, p.process_id, resp, fs.input_buffer[:sz + size_of(Packet)])
+				}
 			}
 		}
 	case 3:

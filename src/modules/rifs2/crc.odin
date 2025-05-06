@@ -1,5 +1,4 @@
 #+private
-#+build !freestanding
 
 // Copyright (c) 2019-2025 Andreas T Jonsson <mail@andreasjonsson.se>
 //
