@@ -244,7 +244,10 @@ setup_machine_config :: proc(config_path: string) -> bool {
 		}
 
 		if mod_name, ok := section_data["module"]; ok {
-			instantiate(mod_name, section_name)
+			// This depends on VFS API version so we need to prevent it loading.
+			if (mod_name != "rifs2") || enable_rifs { 
+				instantiate(mod_name, section_name)
+			}
 		}
 
 		for k, v in section_data {
@@ -381,9 +384,14 @@ retro_load_game :: proc "c" (info: ^retro.game_info) -> c.bool {
 		return false
 	}
 
-	vfs_info := retro.vfs_interface_info{required_interface_version = 3}
+	vfs_info := retro.vfs_interface_info{required_interface_version = 1}
 	if retro_callbacks.environment(retro.ENVIRONMENT_GET_VFS_INTERFACE, &vfs_info) && (vfs_info.iface != nil) {
 		retro_callbacks.vfs = vfs_info.iface
+		
+		if enable_rifs && (vfs_info.required_interface_version < 3) {
+			show_message("Frontend does not support VFS v3 API. RIFS2 module will not be loaded!", 3 * time.Second)
+			enable_rifs = false
+		}
 	} else {
 		log.error("Require the VFS interface!")
 		return false

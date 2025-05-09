@@ -150,6 +150,38 @@ payload_as :: proc(payload: []byte, $ty: typeid) -> ^ty {
 	return (^ty)(&payload[0])
 }
 
+adjust_case_path :: proc(path: string) -> string {
+	when ODIN_OS == .Windows {
+		return path
+	}
+
+	new_path := "."
+
+	str := strings.clone(path, context.temp_allocator)
+	for part in strings.split_iterator(&str, "/") {
+		using retro_callbacks.vfs
+
+		dir := opendir(strings.clone_to_cstring(new_path, context.temp_allocator), false)
+		if dir == nil {
+			return path // Just return the original path.
+		}
+		defer closedir(dir)
+
+		for dir != nil {
+			name := string(dirent_get_name(dir))
+			upper_name := strings.to_upper(name, context.temp_allocator)
+			if upper_name == part {
+				new_path = strings.join({new_path, name}, "/", context.temp_allocator)	
+			}
+
+			if !readdir(dir) {
+				break
+			}
+		}
+	}
+	return new_path
+}
+
 transform_path :: proc(fs: ^FS, path: string) -> string {
 	p := path
 	if (len(p) > 1) && (p[1] == ':') {
@@ -158,6 +190,7 @@ transform_path :: proc(fs: ^FS, path: string) -> string {
 	
 	p, _ = strings.replace(p, "\\", "/", -1, context.temp_allocator)
 	p = strings.trim_prefix(p, "/")
+	p = adjust_case_path(p)
 	p, _ = strings.concatenate({fs.root_path, p}, context.temp_allocator)
 	return p
 }
