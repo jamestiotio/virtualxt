@@ -142,6 +142,32 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 		FILENAME = 0x1E,
 	}
 
+	check_pattern :: proc(parts: []string, pattern: string) -> bool {
+		MATCH_ALL :: "????????.???"
+	
+		if (parts[0] == ".") || (parts[0] == "..") {
+			return pattern != MATCH_ALL
+		}
+
+		pattern_name: [12]byte
+		runtime.copy_from_string(pattern_name[:], MATCH_ALL)
+		runtime.copy_from_string(pattern_name[:], parts[0])
+
+		if len(parts) > 1 {
+			runtime.copy_from_string(pattern_name[9:], parts[1])	
+		}
+
+		for ch, i in pattern_name {
+			mask := pattern[i]
+			if mask == '?' {
+				continue
+			} else if ch != mask {
+				return true
+			}
+		}
+		return false
+	}
+
 	slice.zero(payload[0:43])
 	runtime.memset(&payload[Offset.FILENAME], 0x20, 12)
 	
@@ -203,6 +229,10 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 			return false
 		} (parts) { 
 			log.warnf("FINDNEXT: Invalid DOS filename: %s", cname)
+			continue
+		}
+
+		if check_pattern(parts, string(process.pattern[:])) {
 			continue
 		}
 

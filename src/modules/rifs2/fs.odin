@@ -350,13 +350,32 @@ process_request :: proc(using fs: ^FS, pk: ^Packet, buffer: []byte) -> (resp := 
 		payload_size += num
 		result^ = u16(num)
 	case .FINDFIRST:
-		str := null_terminated_string(packet_payload(pk)[2:])
+		process := get_process(fs, pk.process_id)
+		str := null_terminated_string(packet_payload(pk)[2:])		
 		split := strings.last_index(str, "\\")
 		path := str[0:split]
-		process := get_process(fs, pk.process_id)
 
 		process.attrib = packet_payload_as(pk, u16)^
-		runtime.copy_from_string(process.pattern[:], str[split + 1:])
+		runtime.copy_from_string(process.pattern[:], "????????.???")
+
+		parts: []string
+		ta := context.temp_allocator
+
+		// This is very likely OS dependant. (Tested on SvarDOS)
+		if strings.contains(path, "?") || strings.contains(path, ".") {
+			log.warnf("FINDFIRST: Strange double pattern: %s", str)
+			
+			split = strings.last_index(path, "\\")
+			parts = strings.split(path[split + 1:], ".", ta)
+			path = str[0:split]
+		} else {
+			parts = strings.split(str[split + 1:], ".", ta)
+		}
+
+		runtime.copy_from_string(process.pattern[:], parts[0])
+		if len(parts) > 1 {
+			runtime.copy_from_string(process.pattern[9:], parts[1])	
+		}
 		
 		resp = host_findfirst(process, transform_path(fs, path), buffer)
 		payload_size = (resp == .OK) ? 43 : 0
