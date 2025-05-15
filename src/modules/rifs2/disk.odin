@@ -23,10 +23,10 @@
 
 package rifs2
 
-import "core:strings"
-import "core:slice"
-import "core:log"
 import "base:runtime"
+import "core:log"
+import "core:slice"
+import "core:strings"
 
 import retro "vxt:frontend/libretro"
 import retro_callbacks "vxt:frontend/libretro/callbacks"
@@ -80,14 +80,14 @@ host_delete :: proc(path: string) -> Response {
 
 host_openfile :: proc(process: ^Process, path: string, attrib: u16, payload: []byte) -> Response {
 	data := payload_as(payload, struct #packed {
-		handle, attrib, time, date: u16,
-		size: u32,
-	})
+			handle, attrib, time, date: u16,
+			size:                       u32,
+		})
 	runtime.mem_zero(data, size_of(data^))
 
 	new_handle: u16
 	new_fp: ^^retro.vfs_file_handle
-	
+
 	for fp, handle in process.files {
 		if fp == nil {
 			new_handle = u16(handle)
@@ -97,19 +97,20 @@ host_openfile :: proc(process: ^Process, path: string, attrib: u16, payload: []b
 	}
 
 	if new_fp == nil {
-		new_handle = u16(append(&process.files, nil) - 1)
+		append(&process.files, nil)
+		new_handle = u16(len(process.files)) - 1
 		new_fp = &process.files[new_handle]
 	}
 
 	cpath := strings.clone_to_cstring(path, context.temp_allocator)
 	mode: u32 = retro.VFS_FILE_ACCESS_READ_WRITE | retro.VFS_FILE_ACCESS_UPDATE_EXISTING
-	
+
 	if attrib == 0 {
 		mode = retro.VFS_FILE_ACCESS_READ
 	} else if attrib == 1 {
 		mode = retro.VFS_FILE_ACCESS_WRITE
 	}
-	
+
 	fp := retro_callbacks.vfs.open(cpath, mode, 0)
 	if fp == nil {
 		log.warnf("OPENFILE: %s (FILE_NOT_FOUND)", path)
@@ -125,9 +126,9 @@ host_openfile :: proc(process: ^Process, path: string, attrib: u16, payload: []b
 	}
 
 	// TODO: Fix time and date!
-	
+
 	data.attrib = attrib
-	data.handle = new_handle
+	data.handle = new_handle + 1
 	new_fp^ = fp
 	return .OK
 }
@@ -138,13 +139,13 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 
 	Offset :: enum {
 		ATTRIBUTE = 0x15,
-		FILESIZE = 0x1A,
-		FILENAME = 0x1E,
+		FILESIZE  = 0x1A,
+		FILENAME  = 0x1E,
 	}
 
 	check_pattern :: proc(parts: []string, pattern: string) -> bool {
 		MATCH_ALL :: "????????.???"
-	
+
 		if (parts[0] == ".") || (parts[0] == "..") {
 			return pattern != MATCH_ALL
 		}
@@ -154,7 +155,7 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 		runtime.copy_from_string(pattern_name[:], parts[0])
 
 		if len(parts) > 1 {
-			runtime.copy_from_string(pattern_name[9:], parts[1])	
+			runtime.copy_from_string(pattern_name[9:], parts[1])
 		}
 
 		for ch, i in pattern_name {
@@ -170,7 +171,7 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 
 	slice.zero(payload[0:43])
 	runtime.memset(&payload[Offset.FILENAME], 0x20, 12)
-	
+
 	// Are we looking for the disk lable?
 	if bool(process.attrib & 0x8) {
 		payload[Offset.ATTRIBUTE] = 0x8
@@ -185,11 +186,11 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 
 	ta := context.temp_allocator
 	using retro_callbacks.vfs
-	
+
 	for readdir(process.dir) {
 		is_dir := dirent_is_dir(process.dir)
 		cname := dirent_get_name(process.dir)
-		
+
 		if is_dir && !bool(process.attrib & 0x10) {
 			continue
 		}
@@ -201,12 +202,12 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 			parts = parts[1:]
 		}
 
-		if strings.has_prefix(name, ".") {			
+		if strings.has_prefix(name, ".") {
 			// Is this RIFS root?
 			if process.path == "." {
 				continue
 			}
-			if (name != ".") && (name != "..") { 
+			if (name != ".") && (name != "..") {
 				continue
 			}
 			parts = {name} // Allow '.' in name.
@@ -214,20 +215,20 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 
 		if proc(parts: []string) -> bool {
 			switch len(parts) {
-				case 2:
-					if len(parts[1]) > 3 {
-						return true
-					}
-					fallthrough
-				case 1:
-					if len(parts[0]) > 8 {
-						return true
-					}
-				case:
+			case 2:
+				if len(parts[1]) > 3 {
 					return true
+				}
+				fallthrough
+			case 1:
+				if len(parts[0]) > 8 {
+					return true
+				}
+			case:
+				return true
 			}
 			return false
-		} (parts) { 
+		}(parts) {
 			log.warnf("FINDNEXT: Invalid DOS filename: %s", cname)
 			continue
 		}
@@ -268,7 +269,7 @@ host_findfirst :: proc(process: ^Process, path: string, payload: []byte) -> Resp
 		delete(process.path)
 		process.path = ""
 	}
-	
+
 	cpath := strings.clone_to_cstring(path, context.temp_allocator)
 	if process.dir = retro_callbacks.vfs.opendir(cpath, false); process.dir != nil {
 		process.path = strings.clone(path)
