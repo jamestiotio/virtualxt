@@ -316,7 +316,7 @@ setup_default_machine :: proc(info: ^retro.game_info) {
 
 				path, _ = strings.replace(path, "\\", "/", -1, ta)
 				split := strings.last_index(path, "/")
-				dir := path[0:split]
+				dir := (split != -1) ? path[0:split] : "."
 
 				if dir[len(dir) - 1] != '/' {
 					dir = strings.concatenate({dir, "/"}, ta)
