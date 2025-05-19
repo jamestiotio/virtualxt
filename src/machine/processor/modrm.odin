@@ -86,6 +86,10 @@ decode_mod_reg_rm :: proc() {
 
 	if mode.mod < 3 {
 		decode_ea_offset()
+
+		// TODO: Calling this a rough estimate is an understatement.
+		//       This logic should be moved to the opcode decode function.
+		ea_cycles += opcode.dir ? 10 : 20 // reg <- mem
 	}
 }
 
