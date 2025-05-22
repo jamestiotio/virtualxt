@@ -365,6 +365,7 @@ setup_default_machine :: proc(info: ^retro.game_info) {
 	}
 
 	instantiate("mouse")
+	//instantiate("ethernet")
 
 	instantiate("chipset")
 	configure("chipset", "set_audio_frequency", uint(AUDIO_FREQUENCY))

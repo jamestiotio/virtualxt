@@ -25,6 +25,7 @@ package modules
 @(require) import "modules:chipset"
 @(require) import "modules:disk"
 @(require) import "modules:ems"
+@(require) import "modules:ethernet"
 @(require) import "modules:gdb"
 @(require) import "modules:mouse"
 @(require) import "modules:rifs2"
