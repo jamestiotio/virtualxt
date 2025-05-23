@@ -241,6 +241,8 @@ get_process :: proc(fs: ^FS, id: u16) -> ^Process {
 }
 
 process_request :: proc(using fs: ^FS, pk: ^Packet, buffer: []byte) -> (resp := Response.OK, payload_size := 0) {
+	retro_callbacks.set_led_state(0, 1)
+
 	switch pk.cmd {
 	case .RMDIR:
 		path := null_terminated_string(packet_payload(pk))

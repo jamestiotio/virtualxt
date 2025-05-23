@@ -45,6 +45,7 @@ ENVIRONMENT_GET_PERF_INTERFACE :: 28
 ENVIRONMENT_GET_SAVE_DIRECTORY :: 31
 
 ENVIRONMENT_GET_VFS_INTERFACE :: 45 | ENVIRONMENT_EXPERIMENTAL
+ENVIRONMENT_GET_LED_INTERFACE :: 46 | ENVIRONMENT_EXPERIMENTAL
 
 ENVIRONMENT_SET_MESSAGE :: 6
 ENVIRONMENT_SET_PIXEL_FORMAT :: 10
@@ -55,6 +56,7 @@ ENVIRONMENT_SET_DISK_CONTROL_INTERFACE :: 13
 ENVIRONMENT_SET_FRAME_TIME_CALLBACK :: 21
 ENVIRONMENT_SET_AUDIO_CALLBACK :: 22
 ENVIRONMENT_SET_CORE_OPTIONS_V2 :: 67
+ENVIRONMENT_SET_NETPACKET_INTERFACE :: 78
 
 VFS_FILE_ACCESS_READ :: 1
 VFS_FILE_ACCESS_WRITE :: 2
@@ -69,6 +71,12 @@ VFS_SEEK_POSITION_END :: 2
 VFS_STAT_IS_VALID :: 1
 VFS_STAT_IS_DIRECTORY :: 2
 VFS_STAT_IS_CHARACTER_SPECIAL :: 4
+
+NETPACKET_UNRELIABLE :: 0
+NETPACKET_RELIABLE :: 1
+NETPACKET_UNSEQUENCED :: 2
+NETPACKET_FLUSH_HINT :: 4
+NETPACKET_BROADCAST :: 0xFFFF
 
 DEVICE_ID_MOUSE_X :: 0
 DEVICE_ID_MOUSE_Y :: 1
@@ -134,6 +142,21 @@ vfs_file_handle :: struct {
 vfs_dir_handle :: struct {
 }
 
+netpacket_send_t :: #type proc "c" (flags: c.int, buf: rawptr, ln: c.size_t, client_id: c.uint16_t)
+netpacket_poll_receive_t :: #type proc "c" ()
+netpacket_start_t :: #type proc "c" (client_id: c.uint16_t, send_fn: netpacket_send_t, poll_receive_fn: netpacket_poll_receive_t)
+netpacket_receive_t :: #type proc "c" (buf: rawptr, ln: c.size_t, client_id: c.uint16_t)
+netpacket_stop_t :: #type proc "c" ()
+netpacket_poll_t :: #type proc "c" ()
+netpacket_connected_t :: #type proc "c" (client_id: c.uint16_t)
+netpacket_disconnected_t :: #type proc "c" (client_id: c.uint16_t)
+
+set_led_state_t :: #type proc "c" (led, state: c.int)
+
+led_interface :: struct {
+	set_led_state: set_led_state_t,
+}
+
 pixel_format :: enum c.int {
 	PIXEL_FORMAT_0RGB1555,
 	PIXEL_FORMAT_XRGB8888,
@@ -182,34 +205,44 @@ message :: struct {
 
 vfs_interface :: struct {
 	// VFS v1
-	get_path: vfs_get_path_t,
-	open:     vfs_open_t,
-	close:    vfs_close_t,
-	size:     vfs_size_t,
-	tell:     vfs_tell_t,
-	seek:     vfs_seek_t,
-	read:     vfs_read_t,
-	write:    vfs_write_t,
-	flush:    vfs_flush_t,
-	remove:   vfs_remove_t,
-	rename:   vfs_rename_t,
+	get_path:        vfs_get_path_t,
+	open:            vfs_open_t,
+	close:           vfs_close_t,
+	size:            vfs_size_t,
+	tell:            vfs_tell_t,
+	seek:            vfs_seek_t,
+	read:            vfs_read_t,
+	write:           vfs_write_t,
+	flush:           vfs_flush_t,
+	remove:          vfs_remove_t,
+	rename:          vfs_rename_t,
 
 	// VFS v2
-	truncate: vfs_truncate_t,
+	truncate:        vfs_truncate_t,
 
 	// VFS v3
-	stat: vfs_stat_t,
-	mkdir: vfs_mkdir_t,
-	opendir: vfs_opendir_t,
-	readdir: vfs_readdir_t,
+	stat:            vfs_stat_t,
+	mkdir:           vfs_mkdir_t,
+	opendir:         vfs_opendir_t,
+	readdir:         vfs_readdir_t,
 	dirent_get_name: vfs_dirent_get_name_t,
-	dirent_is_dir: vfs_dirent_is_dir_t,
-	closedir: vfs_closedir_t,
+	dirent_is_dir:   vfs_dirent_is_dir_t,
+	closedir:        vfs_closedir_t,
 }
 
 vfs_interface_info :: struct {
 	required_interface_version: c.uint32_t,
 	iface:                      ^vfs_interface,
+}
+
+netpacket_callback :: struct {
+	start:            netpacket_start_t,
+	receive:          netpacket_receive_t,
+	stop:             netpacket_stop_t, // Optional
+	poll:             netpacket_poll_t, // Optional
+	connected:        netpacket_connected_t, // Optional
+	disconnected:     netpacket_disconnected_t, // Optional
+	protocol_version: cstring, // Optional - If not 'nil' will be used instead of core version to decide if communication is compatible.
 }
 
 system_info :: struct {

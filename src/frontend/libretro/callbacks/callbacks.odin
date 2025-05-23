@@ -24,8 +24,9 @@ package callbacks
 import retro "vxt:frontend/libretro"
 
 environment: retro.environment_t
-video:       retro.video_refresh_t
-audio:       retro.audio_sample_t
-input_poll:  retro.input_poll_t
+video: retro.video_refresh_t
+audio: retro.audio_sample_t
+input_poll: retro.input_poll_t
 input_state: retro.input_state_t
-vfs:         ^retro.vfs_interface
+set_led_state: retro.set_led_state_t
+vfs: ^retro.vfs_interface

@@ -68,6 +68,8 @@ execute_operation :: proc(disk: ^Disk, drive: ^Drive, read: bool, addr: u32, cyl
 		return
 	}
 
+	retro_callbacks.set_led_state(0, 1)
+
 	lba := (i64(cylinders) * i64(drive.heads) + i64(heads)) * i64(drive.sectors) + i64(sectors) - 1
 	if retro_callbacks.vfs.seek(drive.fp, lba * SECTOR_SIZE, retro.VFS_SEEK_POSITION_START) != 0 {
 		return

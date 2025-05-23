@@ -194,6 +194,9 @@ retro_set_environment :: proc "c" (cb: retro.environment_t) {
 
 	cb(ENVIRONMENT_SET_VARIABLES, &options)
 
+	led: led_interface
+	retro_callbacks.set_led_state = cb(ENVIRONMENT_GET_LED_INTERFACE, &led) ? led.set_led_state : proc "c" (_, _: c.int) {}
+
 	no_game: c.bool = true
 	cb(ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_game)
 }
@@ -467,6 +470,7 @@ retro_run :: proc "c" () {
 		check_variables()
 	}
 
+	retro_callbacks.set_led_state(0, 0)
 	retro_callbacks.input_poll()
 
 	cpu_freq := i64(machine.frequency())

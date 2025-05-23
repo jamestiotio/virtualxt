@@ -23,6 +23,7 @@
 
 package ethernet
 
+import "core:bytes"
 import "core:log"
 
 import "vxt:machine/peripheral"
@@ -75,7 +76,7 @@ Ethernet :: struct {
 
 install :: proc(eth: ^Ethernet) -> bool {
 	peripheral.register_io_address_at(eth, 0xB2)
-	//peripheral.register_timer(eth, POLL_DELAY)
+	peripheral.register_timer(eth, POLL_DELAY)
 	return true
 }
 
@@ -87,22 +88,20 @@ config :: proc(eth: ^Ethernet, name, key: string, value: any) -> (ok := true) {
 }
 
 io_in :: proc(eth: ^Ethernet, port: u16) -> byte {
-	return 0xFF
+	return 0 // Return 0 to indicate that we have a network card.
 }
 
 io_out :: proc(eth: ^Ethernet, port: u16, data: byte) {
 	using reg := peripheral.peripheral_interface.registers()
 
-	// Assume no error
-	flags -= {.CARRY}
-
-	check_handle :: proc(eth: ^Ethernet, handle: u16) -> bool {
+	check_handle :: proc(eth: ^Ethernet, handle: u16) {
 		if handle != 0 {
 			log.error("Invalid handle passed by the packet driver!")
-			return false
 		}
-		return true
 	}
+
+	// Assume no error
+	flags -= {.CARRY}
 
 	switch Driver_Command(ah) {
 	case .DRIVE_INFO:
@@ -202,6 +201,28 @@ io_out :: proc(eth: ^Ethernet, port: u16, data: byte) {
 	}
 }
 
+timer :: proc(using eth: ^Ethernet, id: peripheral.Peripheral_Timer_ID, cycles: uint) {
+	if !can_recv { 	// || !has_data(n->sockfd))
+		return
+	}
+
+	//ssize_t sz = recvfrom(n->sockfd, (void*)n->rx_buffer, MAX_PACKET_SIZE, 0, (struct sockaddr*)&addr, &addr_len);
+	//if (sz <= 0) {
+	//	VXT_LOG("'recvfrom' failed!");
+	//	return VXT_NO_ERROR;
+	//}
+
+	// This should be done by the bridge but we need to be sure.
+	if bytes.compare(rx_buffer[:6], mac_addr[:]) != 0 {
+		return
+	}
+
+	can_recv = false
+	//rx_len = sz
+
+	peripheral.peripheral_interface.interrupt(6)
+}
+
 @(init)
 ethernet :: proc() {
 	peripheral.register_constructor(proc(_: string) {
@@ -209,6 +230,7 @@ ethernet :: proc() {
 
 		cb.install = install
 		cb.config = config
+		cb.timer = timer
 		cb.io_in = io_in
 		cb.io_out = io_out
 
