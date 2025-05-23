@@ -61,6 +61,8 @@ dkms.conf
 *.core
 *.dump
 
+/software
+
 /tools/circle/kernel/*.img
 /tools/circle/kernel/*.lst
 
