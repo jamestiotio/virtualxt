@@ -38,21 +38,22 @@ enable_ems := true
 enable_rifs := true
 enable_186 := true
 flag_286 := false
+reset_default_disk := true
 
-reset_default_disk, floppy_boot_prio: bool
+floppy_boot_prio: bool
 gdb_server, gdb_halt: bool
 
 options := [?]retro.variable {
-	{"virtualxt_reset_default_disk", "Reset default disk; false|true"},
+	{"virtualxt_reset_default_disk", "Reset default disk; true|false"},
 	{"virtualxt_boot_priority", "Boot priority; FD|HD"},
 	{"virtualxt_video", "Video standard; CGA|VGA"},
 	{"virtualxt_cpu_frequency", "CPU frequency; 4.77MHz|7.15MHz|14.3MHz"},
 	{"virtualxt_186", "186 instructions; true|false"},
 	{"virtualxt_flag_286", "286 flag register; false|true"},
 	{"virtualxt_ems", "EMS memory; true|false"},
+	{"virtualxt_rifs", "Host RIFS2; true|false"},
 	{"virtualxt_bios", "BIOS; GLaBIOS 0.2.6|TurboXT 3.1"},
 	{"virtualxt_rtc", "RTC type; " + ("GLaTICK 0.8.4|none" when ODIN_OS != .Freestanding else "unavailable")},
-	{"virtualxt_rifs", "Host RIFS2; " + ("true|false" when ODIN_OS != .Freestanding else "unavailable")},
 	{"virtualxt_gdb", "GDB server; " + ("false|true" when #config(VXT_GDBSTUB, false) else "unavailable")},
 	{"virtualxt_gdb_halt", "Wait for debugger; " + ("false|true" when #config(VXT_GDBSTUB, false) else "unavailable")},
 	{},

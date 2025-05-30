@@ -82,8 +82,7 @@ host_openfile :: proc(process: ^Process, path: string, attrib: u16, payload: []b
 	data := payload_as(payload, struct #packed {
 			handle, attrib, time, date: u16,
 			size:                       u32,
-		})
-	runtime.mem_zero(data, size_of(data^))
+		}, true)
 
 	new_handle: u16
 	new_fp: ^^retro.vfs_file_handle
@@ -105,9 +104,9 @@ host_openfile :: proc(process: ^Process, path: string, attrib: u16, payload: []b
 	cpath := strings.clone_to_cstring(path, context.temp_allocator)
 	mode: u32 = retro.VFS_FILE_ACCESS_READ_WRITE | retro.VFS_FILE_ACCESS_UPDATE_EXISTING
 
-	if attrib == 0 {
+	if access := attrib & 7; access == 0 {
 		mode = retro.VFS_FILE_ACCESS_READ
-	} else if attrib == 1 {
+	} else if access == 1 {
 		mode = retro.VFS_FILE_ACCESS_WRITE
 	}
 
@@ -260,7 +259,7 @@ host_findnext :: proc(process: ^Process, payload: []byte) -> Response {
 	return .NO_MORE_FILES
 }
 
-host_findfirst :: proc(process: ^Process, path: string, payload: []byte) -> Response {
+host_findfirst :: proc(process: ^Process, path: string, launch: bool, payload: []byte) -> Response {
 	if process.dir != nil {
 		retro_callbacks.vfs.closedir(process.dir)
 	}
@@ -268,6 +267,13 @@ host_findfirst :: proc(process: ^Process, path: string, payload: []byte) -> Resp
 	if process.path != "" {
 		delete(process.path)
 		process.path = ""
+	}
+
+	// This is a hack in order to autostart in FreeDOS
+	if launch && strings.contains(string(process.pattern[:]), "!!!!!!!!") {
+		slice.zero(payload[0:43])
+		runtime.copy_from_string(payload[0x1E:], "!!!!!!!!.EXE")
+		return .OK
 	}
 
 	cpath := strings.clone_to_cstring(path, context.temp_allocator)

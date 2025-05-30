@@ -38,7 +38,7 @@ VXT_VERSION :: "2.1.0"
 MAX_DISK_IMAGES :: 256
 LOG_BUFFER_SIZE :: 1024
 AUDIO_FREQUENCY :: 44100
-DEFAULT_DISK_IMAGE :: "boot:svardos_hd.img"
+DEFAULT_DISK_IMAGE :: "boot:freedos_hd.img"
 
 @(thread_local)
 log_buffer: [LOG_BUFFER_SIZE]byte

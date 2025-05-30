@@ -155,17 +155,25 @@ verify_packet :: proc(pk: ^Packet) -> bool {
 	return true
 }
 
-packet_payload :: proc(pk: ^Packet) -> []byte {
-	return slice.bytes_from_ptr(rawptr(uintptr(pk) + size_of(Packet)), int(pk.length))
+packet_payload :: proc(pk: ^Packet, clear := false) -> []byte {
+	s := slice.bytes_from_ptr(rawptr(uintptr(pk) + size_of(Packet)), int(pk.length))
+	if clear {
+		slice.zero(s)
+	}
+	return s
 }
 
-packet_payload_as :: proc(pk: ^Packet, $ty: typeid) -> ^ty {
-	return payload_as(packet_payload(pk), ty)
+packet_payload_as :: proc(pk: ^Packet, $ty: typeid, clear := false) -> ^ty {
+	return payload_as(packet_payload(pk), ty, clear)
 }
 
-payload_as :: proc(payload: []byte, $ty: typeid) -> ^ty {
+payload_as :: proc(payload: []byte, $ty: typeid, clear := false) -> ^ty {
 	assert(size_of(ty) <= len(payload))
-	return (^ty)(&payload[0])
+	ptr := (^ty)(&payload[0])
+	if clear {
+		runtime.mem_zero(ptr, size_of(ty))
+	}
+	return ptr
 }
 
 adjust_case_path :: proc(path: string) -> string {
@@ -271,8 +279,13 @@ process_request :: proc(using fs: ^FS, pk: ^Packet, buffer: []byte) -> (resp := 
 		resp = host_exists(transform_path(fs, path)) ? .OK : .FILE_NOT_FOUND
 	case .GETATTR:
 		path := transform_path(fs, null_terminated_string(packet_payload(pk)))
-		if host_exists(path) {
-			payload_as(buffer, u16)^ = host_is_dir(path) ? 0x10 : 0
+		dest := payload_as(buffer, u16)
+
+		if strings.contains(path, "!!!!!!!!") && (launch_path != "") {
+			dest^ = 0
+			payload_size = 2
+		} else if host_exists(path) {
+			dest^ = host_is_dir(path) ? 0x10 : 0
 			payload_size = 2
 		} else {
 			resp = .FILE_NOT_FOUND
@@ -399,7 +412,7 @@ process_request :: proc(using fs: ^FS, pk: ^Packet, buffer: []byte) -> (resp := 
 			runtime.copy_from_string(process.pattern[9:], parts[1])
 		}
 
-		resp = host_findfirst(process, transform_path(fs, path), buffer)
+		resp = host_findfirst(process, transform_path(fs, path), launch_path != "", buffer)
 		payload_size = (resp == .OK) ? 43 : 0
 	case .FINDNEXT:
 		process := get_process(fs, pk.process_id)
