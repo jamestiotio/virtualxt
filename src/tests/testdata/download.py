@@ -36,6 +36,10 @@ skip_opcodes = (
     (0xF6, 7), (0xF7, 7),
 )
 
+skip_v20_opcodes = (
+    (0x81, 7), 0x84, 0x85, # Missing arch tag
+)
+
 def check_and_download(filename, overwrite = False):
     if overwrite or not os.path.exists(filename):
         print("Downloading: " + filename)
@@ -65,10 +69,17 @@ def skip_opcode(name):
 
 def skip_opcode_v20(name, data):
     opcode = int(name[:2], 16)
-    # NOTE: Testdata is missing arch tag.
-    if opcode >= 0x60 and opcode <= 0x62:
+    
+    for op in skip_v20_opcodes:
+        if isinstance(op, tuple):
+            if op[0] == opcode and int(name[3:]) == op[1]:
+                return True
+        elif op == opcode:
+            return True
+
+    if "arch" not in data:
         return False
-    return "arch" not in data or data["arch"] != "186"
+    return data["arch"] != "186"
 
 def unpack_test(name, status):
     # TODO: Test aliases?
