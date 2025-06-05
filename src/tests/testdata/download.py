@@ -32,13 +32,27 @@ skip_opcodes = (
     # Wait and Halt instruction
     0x9B, 0xF4,
 
+    # Undefined
+    (0xFE, 2), (0xFE, 3), (0xFE, 4), (0xFE, 5), (0xFE, 6), (0xFE, 7),
+
     # BUG: IDIV
-    (0xF6, 7), (0xF7, 7),
+    (0xF6, 7), (0xF7, 7)
+)
+
+skip_8088_opcodes = (
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
+    0xC0, 0xC1, 0xC8, 0xC9,
+    (0xD0, 6), (0xD1, 6), (0xD2, 6), (0xD3, 6), 0xD6,
+    0xF1,
+    (0xF6, 1), (0xF7, 1),
+    (0xFF, 7)
 )
 
 skip_v20_opcodes = (
-    (0x81, 7), 0x84, 0x85, # Missing arch tag
 )
+
+# This data is "broken" and should not be tuple encoded.
+flatten_tests = ["8F", "C6", "C7"]
 
 def check_and_download(filename, overwrite = False):
     if overwrite or not os.path.exists(filename):
@@ -55,10 +69,10 @@ def check_and_download(filename, overwrite = False):
 
     return True
 
-def skip_opcode(name):
+def skip_opcode(name, table):
     opcode = int(name[:2], 16)
 
-    for op in skip_opcodes:
+    for op in table + skip_opcodes:
         if isinstance(op, tuple):
             if op[0] == opcode and int(name[3:]) == op[1]:
                 return True
@@ -67,23 +81,8 @@ def skip_opcode(name):
 
     return False
 
-def skip_opcode_v20(name, data):
-    opcode = int(name[:2], 16)
-    
-    for op in skip_v20_opcodes:
-        if isinstance(op, tuple):
-            if op[0] == opcode and int(name[3:]) == op[1]:
-                return True
-        elif op == opcode:
-            return True
-
-    if "arch" not in data:
-        return False
-    return data["arch"] != "186"
-
 def unpack_test(name, status):
-    # TODO: Test aliases?
-    if status in ["undefined", "prefix", "fpu", "undocumented", "alias"]:
+    if status in ["prefix", "fpu"]:
         return False
 
     cbor_name = name + ".cbor"
@@ -103,6 +102,10 @@ def unpack_test(name, status):
     return True
 
 def gen_test(name, data):
+    if name in test_functions:
+        return
+    test_functions.add(name)
+
     mask = 0xFFFF
     if "flags-mask" in data:
         mask = data["flags-mask"]
@@ -111,6 +114,8 @@ def gen_test(name, data):
         f.write(test_case.format(sym_name = name.replace(".", "_"), file_name = name, flags_mask = mask))
 
 ####################### Start #######################
+
+test_functions = set()
 
 # Target 8088 tests
 test_url = test_8088
@@ -122,19 +127,18 @@ if check_and_download(index_filename, True):
         f.write(test_header)
 
     for opcode,data in index_file["opcodes"].items():
-        # This data is "broken" and should not be tuple encoded.
-        if opcode in ["8F", "C6", "C7"]:
+        if opcode in flatten_tests:
             data = data["reg"]["0"]
         
         if "reg" in data:
             for reg,rd in data["reg"].items():
                 name = "{}.{}".format(opcode, reg)
-                if skip_opcode(name):
+                if skip_opcode(name, skip_8088_opcodes):
                     continue
                 if unpack_test(name, rd["status"]):
                     gen_test(name, rd)
         else:
-            if skip_opcode(opcode):
+            if skip_opcode(opcode, skip_8088_opcodes):
                 continue
             if unpack_test(opcode, data["status"]):
                 gen_test(opcode, data)
@@ -146,15 +150,18 @@ if check_and_download(index_filename, True):
     index_file = json.loads(open(index_filename, "r").read())
 
     for opcode,data in index_file["opcodes"].items():      
+        if opcode in flatten_tests:
+            data = data["reg"]["0"]
+
         if "reg" in data:
             for reg,rd in data["reg"].items():
                 name = "{}.{}".format(opcode, reg)
-                if skip_opcode_v20(name, rd):
+                if skip_opcode(name, skip_v20_opcodes):
                     continue
                 if unpack_test(name, rd["status"]):
                     gen_test(name, rd)
         else:
-            if skip_opcode_v20(opcode, data):
+            if skip_opcode(opcode, skip_v20_opcodes):
                 continue
             if unpack_test(opcode, data["status"]):
                 gen_test(opcode, data)

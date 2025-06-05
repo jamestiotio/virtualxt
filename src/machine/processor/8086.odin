@@ -1224,12 +1224,19 @@ decode_8086 :: proc() {
 		}
 		ib = decode_fetch_byte()
 	case 0xD6:
-		// SALC - Set AL If Carry
-		exec = proc() {
-			using registers
-			al = (.CARRY in flags) ? 0xFF : 0x0
-			exec_cycles()
+		// This is a undocumented, but commonly used instruction so lets support it.
+		if .USE_186 not_in state.cpu_options {
+			// SALC - Set AL If Carry
+			exec = proc() {
+				using registers
+				al = (.CARRY in flags) ? 0xFF : 0x0
+				exec_cycles()
+			}
+			break
 		}
+
+		// XLAT on V20
+		fallthrough
 	case 0xD7:
 		// XLATB - Set AL to memory byte DS:[BX + AL]
 		exec = proc() {
