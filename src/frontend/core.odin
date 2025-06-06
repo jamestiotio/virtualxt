@@ -103,6 +103,11 @@ set_eject_state :: proc "c" (ejected: c.bool) -> c.bool {
 	if ejected {
 		return machine.configure("disk", "umount", byte(0))
 	} else {
+		// NOTE: This is not suppoes to happen. Might be a frontend bug?
+		if len(disk_images) <= int(disk_image_index) {
+			return false
+		}
+
 		assert(disk_images[disk_image_index] != "")
 		return machine.configure("disk", "A", disk_images[disk_image_index])
 	}
