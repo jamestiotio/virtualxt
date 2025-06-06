@@ -46,8 +46,10 @@ odin_startup_runtime :: proc "c" (heap: rawptr, size: c.int) {
 @(init)
 init :: proc() {
 	when !#config(VXT_EXTERNAL_HEAP, false) {
-		@(static) heap_memory: [1024 * 1024 * #config(VXT_MAX_MEMORY_MB, 32)]byte // 32MB ought be enough for everyone?
-		core_heap = heap_memory[:]
+		@(static) heap_memory: struct #align (size_of(mem.Buddy_Block)) {
+			buffer: [1024 * 1024 * #config(VXT_MAX_MEMORY_MB, 32)]byte, // 32MB ought be enough for everyone?
+		}
+		core_heap = heap_memory.buffer[:]
 	}
 
 	mem.buddy_allocator_init(&core_allocator, core_heap, mem.DEFAULT_ALIGNMENT)
