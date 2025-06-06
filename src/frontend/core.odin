@@ -444,7 +444,8 @@ retro_load_game :: proc "c" (info: ^retro.game_info) -> c.bool {
 		}
 
 		cpu_options := CPU_Options{.USE_PREFETCH}
-		cpu_options += flag_286 ? {.USE_186} : {}
+		cpu_options += flag_286 ? {.FLAG_286} : {}
+		cpu_options += (enable_186 || flag_286) ? {.USE_186} : {}
 
 		check_variables()
 		initialize(cpu_options) or_return
