@@ -2,7 +2,7 @@ name: Web
 
 on:
     push:
-        branches: ["release"]
+        branches: ["edge"]
 
     workflow_dispatch:
 
