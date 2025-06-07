@@ -1,6 +1,6 @@
 STATIC_LINKING := 0
 AR             := ar
-ODIN_VERSION   := dev-2025-04
+ODIN_VERSION   := dev-2025-06
 TARGET_NAME    := virtualxt
 CORE_DIR       := ../../../
 ODIN_UNPACK    := mkdir odin && unzip odin.zip && tar -xf dist.tar.gz -C ./odin --strip-components=1
@@ -24,7 +24,7 @@ ifeq ($(platform),)
 endif
 
 # system platform
-system_odin = ubuntu-amd64
+system_odin = linux-amd64
 ifeq ($(shell uname -a),)
 	system_odin = windows-amd64
 else ifneq ($(findstring Darwin,$(shell uname -a)),)
