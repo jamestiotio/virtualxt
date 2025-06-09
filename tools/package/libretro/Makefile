@@ -157,7 +157,7 @@ else ifneq (,$(findstring tvos,$(platform)))
    ODIN_TARGET = freestanding_arm64
 else ifeq ($(platform), emscripten)
    TARGET := $(TARGET_NAME)_libretro_emscripten.bc
-   OBJ_EXT := wasm.o
+   OBJ_EXT := o
    fpic := -fPIC
    SHARED := -shared -Wl,--no-undefined
    STATIC_LINKING=1

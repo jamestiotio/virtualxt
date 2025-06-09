@@ -52,7 +52,7 @@ jobs:
             - name: Build (VirtualXT)
               run: |
                   ODIN_TARGET=freestanding_wasm32 make object
-                  source emsdk/emsdk_env.sh && emar rcs virtualxt_libretro_emscripten.bc virtualxt_libretro.wasm.o
+                  source emsdk/emsdk_env.sh && emar rcs virtualxt_libretro_emscripten.bc virtualxt_libretro.o
 
             - name: Build (RetroArch)
               run: |
